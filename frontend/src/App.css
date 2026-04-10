@@ -118,7 +118,6 @@ body {
   border-color: var(--gold-metallic);
 }
 
-/* Counter Animation */
 @keyframes countUp {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }
@@ -126,4 +125,10 @@ body {
 
 .counter-animate {
   animation: countUp 1s ease-out;
+}
+
+/* Grid Animation */
+@keyframes gridMove {
+  0% { transform: translate(0, 0); }
+  100% { transform: translate(50px, 50px); }
 }

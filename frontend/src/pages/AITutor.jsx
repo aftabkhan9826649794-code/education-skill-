@@ -159,14 +159,32 @@ const AITutor = () => {
           {/* Header */}
           <div className="glass-strong rounded-2xl p-8 mb-8 border border-gold/20">
             <div className="flex items-center gap-6 flex-wrap">
-              {/* AI Mentor Avatar */}
+              {/* AI Mentor Avatar - Female AI Teacher */}
               <div className="relative">
-                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-blue-600 to-blue-900 flex items-center justify-center border-4 border-gold animate-pulse">
-                  <i className="fas fa-robot text-6xl text-gold"></i>
+                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-rose-600 flex items-center justify-center border-4 border-gold shadow-2xl overflow-hidden">
+                  {/* Female AI Avatar */}
+                  <div className="text-6xl">👩‍🏫</div>
+                  {/* Animated particles around avatar */}
+                  <div className="absolute inset-0">
+                    {[...Array(8)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="absolute w-2 h-2 bg-gold rounded-full"
+                        style={{
+                          top: `${Math.random() * 100}%`,
+                          left: `${Math.random() * 100}%`,
+                          animation: `float ${Math.random() * 3 + 2}s ease-in-out infinite`,
+                          animationDelay: `${Math.random() * 2}s`,
+                          opacity: Math.random() * 0.7 + 0.3
+                        }}
+                      />
+                    ))}
+                  </div>
                 </div>
-                <div className="absolute inset-0 rounded-full animate-ping opacity-50 border-2 border-gold"></div>
+                <div className="absolute inset-0 rounded-full animate-ping opacity-30 border-2 border-gold"></div>
+                <div className="absolute inset-0 rounded-full animate-pulse opacity-20 bg-gradient-to-r from-pink-500 to-purple-600"></div>
                 {isSpeaking && (
-                  <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-2 animate-pulse">
+                  <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-2 animate-pulse shadow-lg">
                     <i className="fas fa-volume-up text-white"></i>
                   </div>
                 )}
