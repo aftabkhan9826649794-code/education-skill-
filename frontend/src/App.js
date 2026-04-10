@@ -1,6 +1,10 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Home from './pages/Home';
 import ExamHub from './pages/ExamHub';
+import AITutor from './pages/AITutor';
+import Classes from './pages/Classes';
+import Contact from './pages/Contact';
+import Dashboard from './pages/Dashboard';
 import './App.css';
 
 function App() {
@@ -9,6 +13,10 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/exam-hub" element={<ExamHub />} />
+        <Route path="/ai-tutor" element={<AITutor />} />
+        <Route path="/classes" element={<Classes />} />
+        <Route path="/contact" element={<Contact />} />
+        <Route path="/dashboard" element={<Dashboard />} />
       </Routes>
     </BrowserRouter>
   );
