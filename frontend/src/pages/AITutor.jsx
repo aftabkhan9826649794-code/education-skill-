@@ -159,14 +159,18 @@ const AITutor = () => {
           {/* Header */}
           <div className="glass-strong rounded-2xl p-8 mb-8 border border-gold/20">
             <div className="flex items-center gap-6 flex-wrap">
-              {/* AI Mentor Avatar - Female AI Teacher */}
+              {/* AI Mentor Avatar - SARA with Real Image */}
               <div className="relative">
-                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-rose-600 flex items-center justify-center border-4 border-gold shadow-2xl overflow-hidden">
-                  {/* Female AI Avatar */}
-                  <div className="text-6xl">👩‍🏫</div>
+                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-purple-600 via-pink-500 to-rose-600 flex items-center justify-center border-4 border-gold shadow-2xl overflow-hidden p-1">
+                  {/* Circular AI Mentor SARA Image */}
+                  <img 
+                    src="https://customer-assets.emergentagent.com/job_ai-learning-hub-363/artifacts/0z197gja_AI%20Mentor%20Sara.jpeg"
+                    alt="AI Mentor SARA"
+                    className="w-full h-full object-cover rounded-full"
+                  />
                   {/* Animated particles around avatar */}
-                  <div className="absolute inset-0">
-                    {[...Array(8)].map((_, i) => (
+                  <div className="absolute inset-0 pointer-events-none">
+                    {[...Array(12)].map((_, i) => (
                       <div
                         key={i}
                         className="absolute w-2 h-2 bg-gold rounded-full"
@@ -175,22 +179,30 @@ const AITutor = () => {
                           left: `${Math.random() * 100}%`,
                           animation: `float ${Math.random() * 3 + 2}s ease-in-out infinite`,
                           animationDelay: `${Math.random() * 2}s`,
-                          opacity: Math.random() * 0.7 + 0.3
+                          opacity: Math.random() * 0.8 + 0.2,
+                          boxShadow: '0 0 10px currentColor'
                         }}
                       />
                     ))}
                   </div>
                 </div>
+                {/* Multiple glowing rings */}
                 <div className="absolute inset-0 rounded-full animate-ping opacity-30 border-2 border-gold"></div>
-                <div className="absolute inset-0 rounded-full animate-pulse opacity-20 bg-gradient-to-r from-pink-500 to-purple-600"></div>
+                <div className="absolute inset-0 rounded-full animate-pulse opacity-20 bg-gradient-to-r from-pink-500 to-purple-600" style={{animationDuration: '2s'}}></div>
+                <div className="absolute -inset-2 rounded-full border-2 border-gold/50 animate-spin" style={{animationDuration: '8s'}}></div>
                 {isSpeaking && (
-                  <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-2 animate-pulse shadow-lg">
+                  <div className="absolute -bottom-2 -right-2 bg-green-500 rounded-full p-2 animate-pulse shadow-lg border-2 border-white">
                     <i className="fas fa-volume-up text-white"></i>
                   </div>
                 )}
+                {/* Name Badge */}
+                <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2 glass px-3 py-1 rounded-full border border-gold/30">
+                  <span className="text-gold text-xs font-bold">SARA</span>
+                </div>
+              </div>
               </div>
 
-              <div className="flex-1 min-w-[280px]">
+              <div className="flex-1 min-w-[280px] mt-8">
                 <h1 className="text-4xl font-black mb-3">
                   <span className="text-gradient">MATHS & SCIENCE ZONE</span>
                 </h1>

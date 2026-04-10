@@ -3,11 +3,11 @@ import React from 'react';
 const HubsSection = () => {
   const hubs = [
     {
-      title: 'AI Teacher',
+      title: 'AI Teacher SARA',
       description: '24/7 personalized learning with our Intelligent Assistant',
-      image: 'https://images.pexels.com/photos/8566521/pexels-photo-8566521.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940',
+      image: 'https://customer-assets.emergentagent.com/job_ai-learning-hub-363/artifacts/ioxrs3my_ai-teacher.jpg',
       icon: 'fas fa-robot',
-      link: '#ai-teacher'
+      link: '/ai-tutor'
     },
     {
       title: 'Robotic Lab',
@@ -19,9 +19,9 @@ const HubsSection = () => {
     {
       title: 'AI Counselor',
       description: 'Career guidance tailored to your unique strengths',
-      image: 'https://images.unsplash.com/photo-1659356874140-166861df06da?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NzB8MHwxfHNlYXJjaHw0fHxjYXJlZXIlMjBndWlkYW5jZXxlbnwwfHx8fDE3NzU4NTM5MTl8MA&ixlib=rb-4.1.0&q=85',
+      image: 'https://customer-assets.emergentagent.com/job_ai-learning-hub-363/artifacts/m2jf0kgb_ai-councler.png',
       icon: 'fas fa-user-tie',
-      link: '#dashboard'
+      link: '/dashboard'
     }
   ];
 

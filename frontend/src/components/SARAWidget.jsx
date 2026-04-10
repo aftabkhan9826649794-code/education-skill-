@@ -53,8 +53,12 @@ const SARAWidget = () => {
             {/* Header */}
             <div className="bg-gradient-royal p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-full bg-gold flex items-center justify-center text-royal-red text-2xl glow-gold">
-                  <i className="fas fa-robot"></i>
+                <div className="w-12 h-12 rounded-full bg-gold flex items-center justify-center text-royal-red text-2xl glow-gold overflow-hidden border-2 border-white shadow-lg">
+                  <img 
+                    src="https://customer-assets.emergentagent.com/job_ai-learning-hub-363/artifacts/0z197gja_AI%20Mentor%20Sara.jpeg"
+                    alt="AI Teacher SARA"
+                    className="w-full h-full object-cover rounded-full"
+                  />
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-lg">AI Teacher SARA</h3>
