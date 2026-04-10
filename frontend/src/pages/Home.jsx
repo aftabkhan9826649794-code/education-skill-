@@ -9,11 +9,14 @@ import Footer from '../components/Footer';
 import FloatingMic from '../components/FloatingMic';
 import GestureBox from '../components/GestureBox';
 import AnimatedBackground from '../components/AnimatedBackground';
+import SARAWidget from '../components/SARAWidget';
+import AccessibilitySidebar from '../components/AccessibilitySidebar';
 
 const Home = () => {
   return (
     <div className="relative min-h-screen">
       <AnimatedBackground />
+      <AccessibilitySidebar />
       <TopBar />
       <Navbar />
       <HeroSlider />
@@ -21,6 +24,7 @@ const Home = () => {
       <LevelsSection />
       <StatsBar />
       <Footer />
+      <SARAWidget />
       <FloatingMic />
       <GestureBox />
     </div>
