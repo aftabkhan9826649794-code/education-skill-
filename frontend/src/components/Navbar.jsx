@@ -18,6 +18,7 @@ const Navbar = () => {
           <a href="#ai-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">AI HUB</a>
           <a href="#study-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">STUDY HUB</a>
           <a href="#skill-lab" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SKILL LAB</a>
+          <a href="/exam-hub" className="text-sm font-bold text-gold hover:text-white transition-colors duration-300 border-b-2 border-gold glow-gold-hover">EXAM HUB</a>
           <a href="#sign-language" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SIGN LANGUAGE HUB</a>
           <a href="#about-ngo" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">ABOUT NGO</a>
         </div>
@@ -47,6 +48,7 @@ const Navbar = () => {
           <a href="#ai-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">AI HUB</a>
           <a href="#study-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">STUDY HUB</a>
           <a href="#skill-lab" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SKILL LAB</a>
+          <a href="/exam-hub" className="block text-sm font-bold text-gold hover:text-white transition-colors">EXAM HUB ⭐</a>
           <a href="#sign-language" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SIGN LANGUAGE HUB</a>
           <a href="#about-ngo" className="block text-sm font-semibold text-white hover:text-gold transition-colors">ABOUT NGO</a>
           <a href="#login" className="block text-sm font-bold text-gold hover:text-white transition-colors border-t border-gold/20 pt-3 mt-3">LOGIN</a>
