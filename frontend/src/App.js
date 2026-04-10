@@ -5,6 +5,7 @@ import AITutor from './pages/AITutor';
 import Classes from './pages/Classes';
 import Contact from './pages/Contact';
 import Dashboard from './pages/Dashboard';
+import VideoLessonCreator from './pages/VideoLessonCreator';
 import './App.css';
 
 function App() {
@@ -17,6 +18,7 @@ function App() {
         <Route path="/classes" element={<Classes />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/video-creator" element={<VideoLessonCreator />} />
       </Routes>
     </BrowserRouter>
   );
