@@ -146,8 +146,11 @@ const ExamHub = () => {
                     <p className="text-gray-400 text-xs mb-2">Starts in</p>
                     <p className="text-2xl font-black text-gold">{timeLeft[exam.id] || 'Loading...'}</p>
                   </div>
-                  <button className="w-full bg-gradient-royal py-3 rounded-xl text-white font-bold hover:glow-gold transition-all">
-                    <i className="fas fa-play mr-2"></i>Join Exam
+                  <button
+                    onClick={() => navigate('/secure-exam')}
+                    className="w-full bg-gradient-royal py-3 rounded-xl text-white font-bold hover:glow-gold transition-all"
+                  >
+                    <i className="fas fa-lock mr-2"></i>Join Secure Exam
                   </button>
                 </div>
               </div>

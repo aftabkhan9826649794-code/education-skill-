@@ -6,6 +6,7 @@ import Classes from './pages/Classes';
 import Contact from './pages/Contact';
 import Dashboard from './pages/Dashboard';
 import VideoLessonCreator from './pages/VideoLessonCreator';
+import SecureExam from './pages/SecureExam';
 import './App.css';
 
 function App() {
@@ -19,6 +20,7 @@ function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/video-creator" element={<VideoLessonCreator />} />
+        <Route path="/secure-exam" element={<SecureExam />} />
       </Routes>
     </BrowserRouter>
   );
