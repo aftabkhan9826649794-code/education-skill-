@@ -1458,6 +1458,136 @@ async def verify_stream_access(token: str):
             )
             
             if not classroom:
+
+
+# =====================
+# GLOBAL COMPETITION SYSTEM
+# =====================
+
+@router.get("/competition/leaderboard")
+async def get_global_leaderboard(limit: int = 20):
+    """Get global leaderboard for monthly competition"""
+    try:
+        # Aggregate scores from competitive exams, progress reports, attendance
+        # For demo, return mock data (in production, calculate from database)
+        leaderboard = [
+            {"rank": 1, "name": "Aryan Khan", "country": "India", "score": 9850, "avatar": "https://i.pravatar.cc/150?img=1"},
+            {"rank": 2, "name": "Sara Ahmed", "country": "Sudan", "score": 9720, "avatar": "https://i.pravatar.cc/150?img=2"},
+            {"rank": 3, "name": "Mohammed Ali", "country": "UAE", "score": 9650, "avatar": "https://i.pravatar.cc/150?img=3"},
+            {"rank": 4, "name": "Emily Chen", "country": "USA", "score": 9580, "avatar": "https://i.pravatar.cc/150?img=4"},
+            {"rank": 5, "name": "Ravi Kumar", "country": "India", "score": 9500, "avatar": "https://i.pravatar.cc/150?img=5"},
+            {"rank": 6, "name": "Fatima Hassan", "country": "Sudan", "score": 9420, "avatar": "https://i.pravatar.cc/150?img=6"},
+            {"rank": 7, "name": "James Wilson", "country": "UK", "score": 9350, "avatar": "https://i.pravatar.cc/150?img=7"},
+            {"rank": 8, "name": "Priya Sharma", "country": "India", "score": 9280, "avatar": "https://i.pravatar.cc/150?img=8"},
+            {"rank": 9, "name": "Ahmed Khalid", "country": "UAE", "score": 9200, "avatar": "https://i.pravatar.cc/150?img=9"},
+            {"rank": 10, "name": "Sophia Brown", "country": "USA", "score": 9150, "avatar": "https://i.pravatar.cc/150?img=10"},
+            {"rank": 11, "name": "Rohan Das", "country": "India", "score": 9080, "avatar": "https://i.pravatar.cc/150?img=11"},
+            {"rank": 12, "name": "Layla Omar", "country": "Sudan", "score": 9000, "avatar": "https://i.pravatar.cc/150?img=12"},
+            {"rank": 13, "name": "David Lee", "country": "UK", "score": 8950, "avatar": "https://i.pravatar.cc/150?img=13"},
+            {"rank": 14, "name": "Ananya Reddy", "country": "India", "score": 8900, "avatar": "https://i.pravatar.cc/150?img=14"},
+            {"rank": 15, "name": "Omar Ibrahim", "country": "UAE", "score": 8850, "avatar": "https://i.pravatar.cc/150?img=15"},
+            {"rank": 16, "name": "Emma Johnson", "country": "USA", "score": 8800, "avatar": "https://i.pravatar.cc/150?img=16"},
+            {"rank": 17, "name": "Aarav Patel", "country": "India", "score": 8750, "avatar": "https://i.pravatar.cc/150?img=17"},
+            {"rank": 18, "name": "Yasmin Ali", "country": "Sudan", "score": 8700, "avatar": "https://i.pravatar.cc/150?img=18"},
+            {"rank": 19, "name": "Oliver Smith", "country": "UK", "score": 8650, "avatar": "https://i.pravatar.cc/150?img=19"},
+            {"rank": 20, "name": "Ishita Verma", "country": "India", "score": 8600, "avatar": "https://i.pravatar.cc/150?img=20"}
+        ]
+        
+        return {"leaderboard": leaderboard[:limit], "total": len(leaderboard), "last_updated": datetime.now(timezone.utc).isoformat()}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch leaderboard: {str(e)}")
+
+@router.post("/competition/generate-certificate")
+async def generate_excellence_certificate(student_id: str, rank: int, month: str, year: int):
+    """Generate Monthly Excellence Certificate for Top 20"""
+    try:
+        # Get student details
+        student = await db.students.find_one({"id": student_id}, {"_id": 0})
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Certificate data
+        certificate = {
+            "id": str(uuid.uuid4()),
+            "student_id": student_id,
+            "student_name": student.get("name", "Student"),
+            "rank": rank,
+            "month": month,
+            "year": year,
+            "issued_date": datetime.now(timezone.utc).isoformat(),
+            "certificate_url": f"/certificates/{student_id}_{month}_{year}.pdf",
+            "type": "Monthly Excellence",
+            "theme": "Royal Red & Golden"
+        }
+        
+        # Store certificate
+        await db.certificates.insert_one(certificate)
+        
+        # Add to digital vault
+        vault_entry = {
+            "id": str(uuid.uuid4()),
+            "student_id": student_id,
+            "item_type": "certificate",
+            "item_id": certificate["id"],
+            "title": f"Global Excellence Certificate - {month} {year}",
+            "description": f"Ranked #{rank} globally",
+            "added_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.digital_vault.insert_one(vault_entry)
+        
+        # Notify parent
+        parent_notification = NotificationCreate(
+            student_id=student_id,
+            parent_id=f"parent_{student_id}",
+            notification_type="achievement",
+            title="🏆 Global Excellence Achieved!",
+            message=f"Congratulations! Your child ranked #{rank} globally in {month} {year}. Certificate added to digital vault.",
+            data={"rank": rank, "certificate_id": certificate["id"]}
+        )
+        await create_notification(parent_notification)
+        
+        return {"message": "Certificate generated successfully", "certificate": certificate}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate certificate: {str(e)}")
+
+@router.get("/digital-vault/{student_id}")
+async def get_digital_vault(student_id: str):
+    """Get student's digital vault (certificates, badges, achievements)"""
+    try:
+        vault_items = await db.digital_vault.find({"student_id": student_id}, {"_id": 0}).sort("added_at", -1).to_list(100)
+        return {"vault_items": vault_items, "total": len(vault_items)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch digital vault: {str(e)}")
+
+@router.post("/competition/monthly-auto-award")
+async def monthly_auto_award_certificates():
+    """Automatically generate certificates for Top 20 at month end"""
+    try:
+        # Get top 20 from leaderboard
+        leaderboard_data = await get_global_leaderboard(limit=20)
+        leaderboard = leaderboard_data["leaderboard"]
+        
+        month = datetime.now(timezone.utc).strftime("%B")
+        year = datetime.now(timezone.utc).year
+        
+        generated_certificates = []
+        
+        for entry in leaderboard:
+            # In production, get actual student_id from leaderboard entry
+            student_id = f"student_{entry['rank']}"  # Mock for demo
+            
+            cert_result = await generate_excellence_certificate(student_id, entry["rank"], month, year)
+            generated_certificates.append(cert_result["certificate"])
+        
+        return {
+            "message": f"Generated {len(generated_certificates)} certificates for Top 20",
+            "month": month,
+            "year": year,
+            "certificates": generated_certificates
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Auto-award failed: {str(e)}")
+
                 raise HTTPException(status_code=404, detail="Classroom not found")
             
             return {
