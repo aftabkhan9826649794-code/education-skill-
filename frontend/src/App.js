@@ -15,6 +15,8 @@ import LearningHub from './pages/LearningHub';
 import Leaderboard from './pages/Leaderboard';
 import InternationalBoard from './pages/InternationalBoard';
 import InteractiveLesson from './pages/InteractiveLesson';
+import CompetitiveExamHub from './pages/CompetitiveExamHub';
+import CompetitiveExamTest from './pages/CompetitiveExamTest';
 import './App.css';
 
 function App() {
@@ -37,6 +39,8 @@ function App() {
         <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/international-board" element={<InternationalBoard />} />
         <Route path="/interactive-lesson" element={<InteractiveLesson />} />
+        <Route path="/competitive-exam-hub" element={<CompetitiveExamHub />} />
+        <Route path="/competitive-exam-test" element={<CompetitiveExamTest />} />
       </Routes>
     </BrowserRouter>
   );

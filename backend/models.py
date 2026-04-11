@@ -156,3 +156,49 @@ class ResearchProjectCreate(BaseModel):
     field: str
     description: str
     keywords: List[str]
+
+# Competitive Exam Models
+class CompetitiveExamQuestion(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    exam_type: str  # "SAT", "JEE", "GRE", "GMAT", "PhD", etc.
+    topic: str
+    subtopic: Optional[str] = None
+    question_type: str  # "objective", "scenario_based"
+    question: str
+    options: List[str]
+    correct_answer: int  # Index of correct option
+    rationale: str  # AI-generated explanation
+    difficulty: str  # "easy", "medium", "hard", "expert"
+    points: int
+
+class CompetitiveExamAttempt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    exam_type: str
+    topic: str
+    questions: List[dict]
+    student_answers: List[int]
+    score: float
+    total_points: int
+    percentage: float
+    time_taken_seconds: int
+    weak_topics: List[str]
+    job_readiness_score: float  # 0-100
+    attempted_at: datetime
+
+class CompetitiveExamAttemptCreate(BaseModel):
+    student_id: str
+    exam_type: str
+    topic: str
+    questions: List[dict]
+    student_answers: List[int]
+    time_taken_seconds: int
+
+class JobReadinessMetrics(BaseModel):
+    student_id: str
+    overall_score: float  # 0-100
+    exam_performance: dict  # {exam_type: score}
+    strong_areas: List[str]
+    weak_areas: List[str]
+    recommended_focus: List[str]
+    last_updated: datetime

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
+from typing import List
 from models import (
     AttendanceRecord, AttendanceCreate,
     GeneratedContent, ContentGenerateRequest,
@@ -10,7 +11,9 @@ from models import (
     ExamSchedule, ExamScheduleCreate,
     ExamResult, ExamResultCreate,
     SkillRecommendation,
-    ResearchProject, ResearchProjectCreate
+    ResearchProject, ResearchProjectCreate,
+    CompetitiveExamQuestion, CompetitiveExamAttempt, CompetitiveExamAttemptCreate,
+    JobReadinessMetrics
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
@@ -601,3 +604,309 @@ Create content appropriate for {language}-speaking students. Use culturally rele
         return generated_content
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate multilingual content: {str(e)}")
+
+
+
+# =====================
+# COMPETITIVE EXAM HUB
+# =====================
+
+# Competitive Exam Topic Architecture
+COMPETITIVE_EXAM_TOPICS = {
+    "SAT": {
+        "Math": ["Algebra", "Geometry", "Trigonometry", "Statistics", "Advanced Math"],
+        "Reading": ["Evidence-Based Reading", "Literature Analysis", "Vocabulary"],
+        "Writing": ["Grammar", "Essay Writing", "Language Conventions"]
+    },
+    "JEE": {
+        "Physics": ["Mechanics", "Thermodynamics", "Electromagnetism", "Optics", "Modern Physics"],
+        "Chemistry": ["Physical Chemistry", "Organic Chemistry", "Inorganic Chemistry"],
+        "Mathematics": ["Calculus", "Algebra", "Coordinate Geometry", "Trigonometry", "Probability"]
+    },
+    "GRE": {
+        "Quantitative": ["Arithmetic", "Algebra", "Geometry", "Data Analysis"],
+        "Verbal": ["Reading Comprehension", "Text Completion", "Sentence Equivalence"],
+        "Analytical Writing": ["Issue Essay", "Argument Essay"]
+    },
+    "GMAT": {
+        "Quantitative": ["Problem Solving", "Data Sufficiency"],
+        "Verbal": ["Critical Reasoning", "Reading Comprehension", "Sentence Correction"],
+        "Integrated Reasoning": ["Graphics Interpretation", "Table Analysis"],
+        "Analytical Writing": ["Analysis of Argument"]
+    },
+    "PhD": {
+        "Research Methodology": ["Qualitative Methods", "Quantitative Methods", "Mixed Methods"],
+        "Literature Review": ["Critical Analysis", "Systematic Review", "Meta-Analysis"],
+        "Statistics": ["Advanced Statistics", "Research Design", "Data Analysis"],
+        "Thesis": ["Proposal Writing", "Defense Preparation"]
+    }
+}
+
+@router.get("/competitive/exams/topics")
+async def get_competitive_exam_topics():
+    """Get all competitive exam types and their topics"""
+    return {"exam_topics": COMPETITIVE_EXAM_TOPICS}
+
+@router.post("/competitive/generate-questions")
+async def generate_competitive_questions(
+    exam_type: str,
+    topic: str,
+    subtopic: str = None,
+    difficulty: str = "medium",
+    num_questions: int = 10,
+    question_type: str = "objective"
+):
+    """Generate competitive exam questions with AI-generated rationales"""
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="LLM API key not configured")
+        
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"competitive_{exam_type}_{topic}_{datetime.now().timestamp()}",
+            system_message=f"You are an expert exam question generator for {exam_type}. Generate high-quality, challenging questions with detailed explanations."
+        ).with_model("openai", "gpt-5.2")
+        
+        subtopic_text = f" specifically on {subtopic}" if subtopic else ""
+        
+        if question_type == "objective":
+            prompt = f"""Generate {num_questions} {difficulty} difficulty multiple-choice questions for {exam_type} exam.
+Topic: {topic}{subtopic_text}
+
+For each question, provide:
+1. A challenging, exam-standard question
+2. 4 options (A, B, C, D)
+3. The correct answer (index 0-3)
+4. A DETAILED rationale explaining WHY the correct answer is right and why others are wrong
+
+Return ONLY valid JSON in this exact format:
+{{
+  "questions": [
+    {{
+      "question": "Question text here?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": 0,
+      "rationale": "Detailed explanation: The correct answer is A because... Option B is incorrect because... Option C is wrong because... Option D is incorrect because..."
+    }}
+  ]
+}}"""
+        else:  # scenario_based
+            prompt = f"""Generate {num_questions} {difficulty} difficulty scenario-based questions for {exam_type} exam.
+Topic: {topic}{subtopic_text}
+
+Each question should present a real-world scenario requiring application of concepts.
+
+Return ONLY valid JSON in this exact format:
+{{
+  "questions": [
+    {{
+      "question": "Scenario: [detailed scenario]\n\nQuestion: [question based on scenario]",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": 0,
+      "rationale": "Detailed step-by-step explanation of how to approach this scenario and why the correct answer is right."
+    }}
+  ]
+}}"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse JSON response
+        try:
+            response_text = response.strip()
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            questions_data = json.loads(response_text)
+            
+            # Convert to CompetitiveExamQuestion objects
+            questions = []
+            points_map = {"easy": 1, "medium": 2, "hard": 3, "expert": 5}
+            
+            for q in questions_data.get("questions", []):
+                question_obj = CompetitiveExamQuestion(
+                    exam_type=exam_type,
+                    topic=topic,
+                    subtopic=subtopic,
+                    question_type=question_type,
+                    question=q["question"],
+                    options=q["options"],
+                    correct_answer=q["correct_answer"],
+                    rationale=q["rationale"],
+                    difficulty=difficulty,
+                    points=points_map.get(difficulty, 2)
+                )
+                questions.append(question_obj.model_dump())
+            
+            # Store questions in database
+            if questions:
+                await db.competitive_questions.insert_many(questions)
+            
+            return {
+                "exam_type": exam_type,
+                "topic": topic,
+                "subtopic": subtopic,
+                "difficulty": difficulty,
+                "total_questions": len(questions),
+                "questions": questions
+            }
+        
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to parse AI response as JSON: {str(e)}")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate questions: {str(e)}")
+
+@router.post("/competitive/submit-attempt", response_model=CompetitiveExamAttempt)
+async def submit_competitive_exam_attempt(attempt: CompetitiveExamAttemptCreate):
+    """Submit competitive exam attempt and calculate job readiness score"""
+    try:
+        # Calculate score
+        total_points = 0
+        earned_points = 0
+        weak_topics = []
+        correct_count = 0
+        
+        for i, question in enumerate(attempt.questions):
+            total_points += question.get("points", 1)
+            student_answer = attempt.student_answers[i] if i < len(attempt.student_answers) else -1
+            correct_answer = question.get("correct_answer", -1)
+            
+            if student_answer == correct_answer:
+                earned_points += question.get("points", 1)
+                correct_count += 1
+            else:
+                # Track weak topic
+                topic = question.get("subtopic") or question.get("topic")
+                if topic and topic not in weak_topics:
+                    weak_topics.append(topic)
+        
+        percentage = (earned_points / total_points * 100) if total_points > 0 else 0
+        
+        # Calculate Job Readiness Score (0-100)
+        # Based on: accuracy (60%), difficulty level (20%), time efficiency (20%)
+        accuracy_score = (correct_count / len(attempt.questions)) * 60 if len(attempt.questions) > 0 else 0
+        
+        # Difficulty bonus
+        difficulty_map = {"easy": 5, "medium": 15, "hard": 20, "expert": 20}
+        avg_difficulty = attempt.questions[0].get("difficulty", "medium") if attempt.questions else "medium"
+        difficulty_score = difficulty_map.get(avg_difficulty, 15)
+        
+        # Time efficiency (assuming 60 seconds per question is optimal)
+        optimal_time = len(attempt.questions) * 60
+        time_efficiency = min(20, (optimal_time / attempt.time_taken_seconds) * 20) if attempt.time_taken_seconds > 0 else 10
+        
+        job_readiness_score = min(100, accuracy_score + difficulty_score + time_efficiency)
+        
+        # Create attempt record
+        attempt_dict = attempt.model_dump()
+        attempt_dict['score'] = earned_points
+        attempt_dict['total_points'] = total_points
+        attempt_dict['percentage'] = percentage
+        attempt_dict['weak_topics'] = weak_topics
+        attempt_dict['job_readiness_score'] = job_readiness_score
+        attempt_dict['attempted_at'] = datetime.now(timezone.utc).isoformat()
+        
+        attempt_obj = CompetitiveExamAttempt(**attempt_dict)
+        await db.competitive_attempts.insert_one(attempt_obj.model_dump())
+        
+        # Create progress report
+        progress = ProgressReportCreate(
+            student_id=attempt.student_id,
+            subject=attempt.exam_type,
+            topic=attempt.topic,
+            score=earned_points,
+            total=total_points,
+            weak_areas=weak_topics
+        )
+        await create_progress_report(progress)
+        
+        # Update job readiness metrics
+        await update_job_readiness_metrics(attempt.student_id, attempt.exam_type, job_readiness_score, weak_topics)
+        
+        return attempt_obj
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit attempt: {str(e)}")
+
+async def update_job_readiness_metrics(student_id: str, exam_type: str, score: float, weak_areas: List[str]):
+    """Update student's job readiness metrics"""
+    try:
+        # Get existing metrics or create new
+        existing = await db.job_readiness.find_one({"student_id": student_id}, {"_id": 0})
+        
+        if existing:
+            # Update existing metrics
+            exam_performance = existing.get("exam_performance", {})
+            exam_performance[exam_type] = score
+            
+            # Calculate overall score (average of all exams)
+            overall_score = sum(exam_performance.values()) / len(exam_performance)
+            
+            # Update weak areas
+            current_weak = existing.get("weak_areas", [])
+            for area in weak_areas:
+                if area not in current_weak:
+                    current_weak.append(area)
+            
+            await db.job_readiness.update_one(
+                {"student_id": student_id},
+                {"$set": {
+                    "overall_score": overall_score,
+                    "exam_performance": exam_performance,
+                    "weak_areas": current_weak,
+                    "last_updated": datetime.now(timezone.utc).isoformat()
+                }}
+            )
+        else:
+            # Create new metrics
+            metrics = JobReadinessMetrics(
+                student_id=student_id,
+                overall_score=score,
+                exam_performance={exam_type: score},
+                strong_areas=[],
+                weak_areas=weak_areas,
+                recommended_focus=weak_areas,
+                last_updated=datetime.now(timezone.utc)
+            )
+            await db.job_readiness.insert_one(metrics.model_dump())
+    
+    except Exception as e:
+        print(f"Error updating job readiness metrics: {str(e)}")
+
+@router.get("/competitive/attempts/student/{student_id}")
+async def get_student_competitive_attempts(student_id: str, exam_type: str = None):
+    """Get student's competitive exam attempts"""
+    try:
+        query = {"student_id": student_id}
+        if exam_type:
+            query["exam_type"] = exam_type
+        
+        attempts = await db.competitive_attempts.find(query, {"_id": 0}).sort("attempted_at", -1).limit(50).to_list(50)
+        return {"attempts": attempts, "total": len(attempts)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch attempts: {str(e)}")
+
+@router.get("/competitive/job-readiness/{student_id}")
+async def get_job_readiness_score(student_id: str):
+    """Get student's job readiness score and metrics"""
+    try:
+        metrics = await db.job_readiness.find_one({"student_id": student_id}, {"_id": 0})
+        
+        if not metrics:
+            return {
+                "student_id": student_id,
+                "overall_score": 0,
+                "exam_performance": {},
+                "strong_areas": [],
+                "weak_areas": [],
+                "recommended_focus": [],
+                "message": "No competitive exam attempts yet"
+            }
+        
+        return metrics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch job readiness: {str(e)}")
