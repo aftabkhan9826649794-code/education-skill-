@@ -19,6 +19,7 @@ import CompetitiveExamHub from './pages/CompetitiveExamHub';
 import CompetitiveExamTest from './pages/CompetitiveExamTest';
 import EducationHub from './pages/EducationHub';
 import EducationBoardSelector from './pages/EducationBoardSelector';
+import MasterSkillHub from './pages/MasterSkillHub';
 import './App.css';
 
 function App() {
@@ -45,6 +46,7 @@ function App() {
         <Route path="/competitive-exam-test" element={<CompetitiveExamTest />} />
         <Route path="/education-hub" element={<EducationHub />} />
         <Route path="/education-board-selector" element={<EducationBoardSelector />} />
+        <Route path="/master-skill-hub" element={<MasterSkillHub />} />
       </Routes>
     </BrowserRouter>
   );

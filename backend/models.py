@@ -322,3 +322,42 @@ class JobReadinessMetrics(BaseModel):
     weak_areas: List[str]
     recommended_focus: List[str]
     last_updated: datetime
+
+# Master Skill Hub Models
+class SkillModule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    skill_name: str  # "Computer Mastery", "Coding Lab", "AI-Tool Specialist"
+    description: str
+    icon: str
+    topics: List[str]
+    created_at: datetime
+
+class SkillResource(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    skill_id: str
+    type: str  # "video", "pdf"
+    title: str
+    description: str
+    url: str  # YouTube or PDF external link
+    created_at: datetime
+
+class SkillBadge(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    skill_id: str
+    skill_name: str
+    score: float  # Percentage score from quiz
+    earned_at: datetime
+    badge_type: str = "WINGS Certified Golden Badge"
+
+class SkillQuizAttempt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    skill_id: str
+    questions: List[dict]
+    answers: List[int]
+    correct_answers: int
+    total_questions: int
+    score_percentage: float
+    badge_earned: bool
+    attempted_at: datetime

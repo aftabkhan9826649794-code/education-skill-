@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 from typing import List
+from uuid import uuid4
 from models import (
     AttendanceRecord, AttendanceCreate,
     GeneratedContent, ContentGenerateRequest,
@@ -15,7 +16,8 @@ from models import (
     CompetitiveExamQuestion, CompetitiveExamAttempt, CompetitiveExamAttemptCreate,
     JobReadinessMetrics,
     ParentUser, SuperAdmin, ClassroomFeed, StreamAccessToken, AuditLog,
-    StudentLearningProfile, StudentBehavior, PersonalizedRecommendation, SARAPersonality
+    StudentLearningProfile, StudentBehavior, PersonalizedRecommendation, SARAPersonality,
+    SkillModule, SkillResource, SkillBadge, SkillQuizAttempt
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
@@ -1170,7 +1172,7 @@ async def log_audit(user_id: str, user_role: str, action: str, classroom_id: str
 async def register_parent(name: str, email: str, phone: str, student_ids: List[str]):
     """Register a parent with linked students"""
     try:
-        parent_id = str(uuid.uuid4())
+        parent_id = str(uuid4())
         parent = ParentUser(
             parent_id=parent_id,
             name=name,
@@ -1458,6 +1460,23 @@ async def verify_stream_access(token: str):
             )
             
             if not classroom:
+                raise HTTPException(status_code=404, detail="Classroom not found")
+            
+            return {
+                "access_valid": True,
+                "role": "parent",
+                "classroom": {
+                    "classroom_id": classroom["classroom_id"],
+                    "class_level": classroom["class_level"],
+                    "section": classroom["section"]
+                },
+                "stream_url": classroom["stream_url"],  # Encrypted stream URL
+                "expires_at": token_data["expires_at"]
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stream verification failed: {str(e)}")
 
 
 # =====================
@@ -1508,7 +1527,7 @@ async def generate_excellence_certificate(student_id: str, rank: int, month: str
         
         # Certificate data
         certificate = {
-            "id": str(uuid.uuid4()),
+            "id": str(uuid4()),
             "student_id": student_id,
             "student_name": student.get("name", "Student"),
             "rank": rank,
@@ -1525,7 +1544,7 @@ async def generate_excellence_certificate(student_id: str, rank: int, month: str
         
         # Add to digital vault
         vault_entry = {
-            "id": str(uuid.uuid4()),
+            "id": str(uuid4()),
             "student_id": student_id,
             "item_type": "certificate",
             "item_id": certificate["id"],
@@ -1588,24 +1607,6 @@ async def monthly_auto_award_certificates():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Auto-award failed: {str(e)}")
 
-                raise HTTPException(status_code=404, detail="Classroom not found")
-            
-            return {
-                "access_valid": True,
-                "role": "parent",
-                "classroom": {
-                    "classroom_id": classroom["classroom_id"],
-                    "class_level": classroom["class_level"],
-                    "section": classroom["section"]
-                },
-                "stream_url": classroom["stream_url"],  # Encrypted stream URL
-                "expires_at": token_data["expires_at"]
-            }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Stream verification failed: {str(e)}")
 
 
 
@@ -1642,3 +1643,293 @@ async def get_job_readiness_score(student_id: str):
         return metrics
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch job readiness: {str(e)}")
+
+# =====================
+# MASTER SKILL HUB
+# =====================
+
+@router.get("/skills/modules")
+async def get_skill_modules():
+    """Get all skill modules (Computer Mastery, Coding Lab, AI Specialist)"""
+    try:
+        modules = await db.skill_modules.find({}, {"_id": 0}).to_list(100)
+        
+        # If no modules exist, create default ones
+        if not modules:
+            default_modules = [
+                {
+                    "id": "computer-mastery",
+                    "skill_name": "Computer Mastery",
+                    "description": "Master operating systems, productivity tools, and digital workflows",
+                    "icon": "💻",
+                    "topics": ["Windows/Mac/Linux", "MS Office Suite", "File Management", "Troubleshooting"],
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                },
+                {
+                    "id": "coding-lab",
+                    "skill_name": "Coding Lab",
+                    "description": "Learn programming from basics to advanced algorithms",
+                    "icon": "⚡",
+                    "topics": ["Python", "JavaScript", "Data Structures", "Algorithms", "Web Development"],
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                },
+                {
+                    "id": "ai-specialist",
+                    "skill_name": "AI-Tool Specialist",
+                    "description": "Harness the power of AI tools and machine learning",
+                    "icon": "🤖",
+                    "topics": ["ChatGPT", "Midjourney", "AI Automation", "Prompt Engineering"],
+                    "created_at": datetime.now(timezone.utc).isoformat()
+                }
+            ]
+            await db.skill_modules.insert_many(default_modules)
+            modules = default_modules
+        
+        return {"modules": modules, "total": len(modules)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch skill modules: {str(e)}")
+
+@router.get("/skills/resources/{skill_id}")
+async def get_skill_resources(skill_id: str):
+    """Get all resources (YouTube videos, PDFs) for a specific skill"""
+    try:
+        resources = await db.skill_resources.find({"skill_id": skill_id}, {"_id": 0}).to_list(100)
+        
+        # If no resources exist, create sample ones
+        if not resources:
+            sample_resources = {
+                "computer-mastery": [
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "video",
+                        "title": "Complete Computer Basics for Beginners",
+                        "description": "Learn computer fundamentals from scratch",
+                        "url": "https://www.youtube.com/watch?v=0xQHm0C1Y0c",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "video",
+                        "title": "MS Office Complete Tutorial",
+                        "description": "Master Word, Excel, PowerPoint",
+                        "url": "https://www.youtube.com/watch?v=_WH3NDznvUA",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "pdf",
+                        "title": "Computer Fundamentals Guide",
+                        "description": "Complete PDF guide to computer basics",
+                        "url": "https://www.tutorialspoint.com/computer_fundamentals/computer_fundamentals_tutorial.pdf",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                ],
+                "coding-lab": [
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "video",
+                        "title": "Python Programming for Beginners",
+                        "description": "Complete Python course from zero to hero",
+                        "url": "https://www.youtube.com/watch?v=_uQrJ0TkZlc",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "video",
+                        "title": "JavaScript Full Course",
+                        "description": "Modern JavaScript from basics to advanced",
+                        "url": "https://www.youtube.com/watch?v=PkZNo7MFNFg",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "pdf",
+                        "title": "Data Structures & Algorithms Handbook",
+                        "description": "Comprehensive DSA guide with examples",
+                        "url": "https://www.tutorialspoint.com/data_structures_algorithms/data_structures_algorithms_tutorial.pdf",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                ],
+                "ai-specialist": [
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "video",
+                        "title": "ChatGPT Mastery Course",
+                        "description": "Master AI tools and prompt engineering",
+                        "url": "https://www.youtube.com/watch?v=VznoKyh6AXs",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "video",
+                        "title": "AI Tools for Productivity",
+                        "description": "Learn Midjourney, DALL-E, and more",
+                        "url": "https://www.youtube.com/watch?v=qIKLZG3e6Co",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    },
+                    {
+                        "id": str(uuid4()),
+                        "skill_id": skill_id,
+                        "type": "pdf",
+                        "title": "Prompt Engineering Guide",
+                        "description": "Master the art of AI prompting",
+                        "url": "https://arxiv.org/pdf/2312.16171.pdf",
+                        "created_at": datetime.now(timezone.utc).isoformat()
+                    }
+                ]
+            }
+            
+            if skill_id in sample_resources:
+                await db.skill_resources.insert_many(sample_resources[skill_id])
+                resources = sample_resources[skill_id]
+        
+        return {"resources": resources, "total": len(resources)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch resources: {str(e)}")
+
+@router.post("/skills/generate-quiz")
+async def generate_skill_quiz(skill_id: str, num_questions: int = 10):
+    """Generate AI quiz for skill assessment"""
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="LLM API key not configured")
+        
+        # Get skill details
+        skill = await db.skill_modules.find_one({"id": skill_id}, {"_id": 0})
+        if not skill:
+            raise HTTPException(status_code=404, detail="Skill module not found")
+        
+        skill_name = skill.get("skill_name", "General Skills")
+        topics = skill.get("topics", [])
+        
+        # Initialize LLM chat
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"skill_quiz_{skill_id}_{datetime.now().timestamp()}",
+            system_message=f"You are an expert quiz generator for {skill_name}. Generate challenging, practical questions that test real-world skills."
+        ).with_model("openai", "gpt-5.2")
+        
+        prompt = f"""Generate {num_questions} multiple-choice questions for {skill_name} skill assessment.
+Topics to cover: {', '.join(topics)}
+
+Requirements:
+- Questions should test practical knowledge and application
+- Mix of difficulty levels (easy, medium, hard)
+- Real-world scenarios where applicable
+- Clear, unambiguous correct answers
+
+Return ONLY valid JSON in this exact format:
+{{
+  "questions": [
+    {{
+      "question": "Question text here?",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correct_answer": 0,
+      "explanation": "Brief explanation of why this is correct"
+    }}
+  ]
+}}"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse JSON response
+        try:
+            response_text = response.strip()
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            quiz_data = json.loads(response_text)
+            
+            return {
+                "skill_id": skill_id,
+                "skill_name": skill_name,
+                "questions": quiz_data.get("questions", []),
+                "total_questions": len(quiz_data.get("questions", []))
+            }
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {str(e)}")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate quiz: {str(e)}")
+
+@router.post("/skills/submit-quiz")
+async def submit_skill_quiz(
+    user_id: str,
+    skill_id: str,
+    questions: List[dict],
+    answers: List[int]
+):
+    """Submit skill quiz and award badge if score >= 80%"""
+    try:
+        # Calculate score
+        correct_count = 0
+        for i, question in enumerate(questions):
+            if i < len(answers) and answers[i] == question.get("correct_answer", -1):
+                correct_count += 1
+        
+        total_questions = len(questions)
+        score_percentage = (correct_count / total_questions * 100) if total_questions > 0 else 0
+        badge_earned = score_percentage >= 80
+        
+        # Create quiz attempt record
+        attempt = {
+            "id": str(uuid4()),
+            "user_id": user_id,
+            "skill_id": skill_id,
+            "questions": questions,
+            "answers": answers,
+            "correct_answers": correct_count,
+            "total_questions": total_questions,
+            "score_percentage": score_percentage,
+            "badge_earned": badge_earned,
+            "attempted_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.skill_quiz_attempts.insert_one(attempt)
+        
+        # Award badge if earned
+        if badge_earned:
+            skill = await db.skill_modules.find_one({"id": skill_id}, {"_id": 0})
+            skill_name = skill.get("skill_name", "Skill") if skill else "Skill"
+            
+            badge = {
+                "id": str(uuid4()),
+                "user_id": user_id,
+                "skill_id": skill_id,
+                "skill_name": skill_name,
+                "score": score_percentage,
+                "earned_at": datetime.now(timezone.utc).isoformat(),
+                "badge_type": "WINGS Certified Golden Badge"
+            }
+            await db.skill_badges.insert_one(badge)
+        
+        return {
+            "correct_answers": correct_count,
+            "total_questions": total_questions,
+            "score_percentage": round(score_percentage, 2),
+            "badge_earned": badge_earned,
+            "message": "Congratulations! You earned the Golden Badge!" if badge_earned else "Keep practicing to earn the Golden Badge (80% required)."
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit quiz: {str(e)}")
+
+@router.get("/skills/badges/{user_id}")
+async def get_user_badges(user_id: str):
+    """Get all badges earned by a user"""
+    try:
+        badges = await db.skill_badges.find({"user_id": user_id}, {"_id": 0}).sort("earned_at", -1).to_list(100)
+        return {"badges": badges, "total": len(badges)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch badges: {str(e)}")
