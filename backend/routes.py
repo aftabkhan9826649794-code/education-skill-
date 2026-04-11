@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
 from typing import List
 from uuid import uuid4
+import os
 from models import (
     AttendanceRecord, AttendanceCreate,
     GeneratedContent, ContentGenerateRequest,
@@ -17,10 +19,10 @@ from models import (
     JobReadinessMetrics,
     ParentUser, SuperAdmin, ClassroomFeed, StreamAccessToken, AuditLog,
     StudentLearningProfile, StudentBehavior, PersonalizedRecommendation, SARAPersonality,
-    SkillModule, SkillResource, SkillBadge, SkillQuizAttempt
+    SkillModule, SkillResource, SkillBadge, SkillQuizAttempt,
+    Donation, FeePayment, Receipt, MessagingLog, Transaction
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
-import os
 import json
 
 router = APIRouter()
@@ -1933,3 +1935,419 @@ async def get_user_badges(user_id: str):
         return {"badges": badges, "total": len(badges)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch badges: {str(e)}")
+
+# =====================
+# AUTOMATED FINANCIAL RECEIPT SYSTEM
+# =====================
+
+from pdf_generator import generate_donation_receipt, generate_fee_receipt
+import secrets as secret_gen
+
+def generate_receipt_number(prefix="WGS"):
+    """Generate unique receipt number"""
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    random_suffix = secret_gen.token_hex(3).upper()
+    return f"{prefix}-{timestamp}-{random_suffix}"
+
+async def send_whatsapp_mock(phone: str, message: str, related_type: str, related_id: str):
+    """Mock WhatsApp sending (stores in database)"""
+    try:
+        log = MessagingLog(
+            message_type="whatsapp",
+            recipient=phone,
+            content=message,
+            status="sent",
+            related_type=related_type,
+            related_id=related_id,
+            sent_at=datetime.now(timezone.utc)
+        )
+        await db.messaging_logs.insert_one(log.model_dump())
+        return True
+    except Exception as e:
+        print(f"WhatsApp mock error: {str(e)}")
+        return False
+
+async def send_email_mock(email: str, subject: str, content: str, related_type: str, related_id: str):
+    """Mock Email sending (stores in database)"""
+    try:
+        log = MessagingLog(
+            message_type="email",
+            recipient=email,
+            subject=subject,
+            content=content,
+            status="sent",
+            related_type=related_type,
+            related_id=related_id,
+            sent_at=datetime.now(timezone.utc)
+        )
+        await db.messaging_logs.insert_one(log.model_dump())
+        return True
+    except Exception as e:
+        print(f"Email mock error: {str(e)}")
+        return False
+
+# DONATION ROUTES
+
+@router.post("/donations/create")
+async def create_donation(
+    donor_type: str,
+    donor_name: str,
+    donor_email: str,
+    donor_phone: str,
+    amount: float,
+    purpose: str,
+    payment_method: str,
+    donor_address: str = None,
+    transaction_id: str = None
+):
+    """Create donation and generate PDF receipt"""
+    try:
+        # Generate receipt number
+        receipt_number = generate_receipt_number("DON")
+        
+        # Create donation record
+        donation = Donation(
+            donor_type=donor_type,
+            donor_name=donor_name,
+            donor_email=donor_email,
+            donor_phone=donor_phone,
+            donor_address=donor_address,
+            amount=amount,
+            payment_method=payment_method,
+            transaction_id=transaction_id,
+            purpose=purpose,
+            receipt_number=receipt_number,
+            receipt_pdf_path=f"/receipts/donations/{receipt_number}.pdf",
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        # Generate PDF receipt
+        pdf_path = f"/app/backend/static/receipts/donations/{receipt_number}.pdf"
+        generate_donation_receipt(donation.model_dump(), pdf_path)
+        
+        # Save donation to database
+        await db.donations.insert_one(donation.model_dump())
+        
+        # Send WhatsApp (mock)
+        whatsapp_message = f"🏆 WINGS GLOBAL EDU-SKILL HUB\n\nDear {donor_name},\n\nThank you for your generous donation of ₹{amount:,.2f}!\n\nReceipt No: {receipt_number}\nPurpose: {purpose}\n\nYour PDF receipt has been generated.\n\n✨ Together, we empower students worldwide!"
+        whatsapp_sent = await send_whatsapp_mock(donor_phone, whatsapp_message, "donation", donation.id)
+        
+        # Send Email (mock)
+        email_subject = f"Donation Receipt - {receipt_number}"
+        email_content = f"""
+        <html>
+        <body style="font-family: Arial; background: linear-gradient(135deg, #C41E3A, #FFD700); padding: 20px;">
+            <div style="background: white; padding: 30px; border-radius: 10px; max-width: 600px; margin: auto;">
+                <h1 style="color: #C41E3A; text-align: center;">🏆 WINGS GLOBAL EDU-SKILL HUB</h1>
+                <h2 style="color: #FFD700; text-align: center;">Donation Receipt</h2>
+                <p>Dear <strong>{donor_name}</strong>,</p>
+                <p>Thank you for your generous donation of <strong>₹{amount:,.2f}</strong>!</p>
+                <table style="width: 100%; margin: 20px 0; border-collapse: collapse;">
+                    <tr style="background: #FFF8DC;">
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Receipt No:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">{receipt_number}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Purpose:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">{purpose}</td>
+                    </tr>
+                    <tr style="background: #FFF8DC;">
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Amount:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">₹{amount:,.2f}</td>
+                    </tr>
+                </table>
+                <p style="text-align: center; color: #666;">Your PDF receipt is attached.</p>
+                <p style="text-align: center; color: #C41E3A; font-weight: bold;">✨ Together, we empower students worldwide! ✨</p>
+            </div>
+        </body>
+        </html>
+        """
+        email_sent = await send_email_mock(donor_email, email_subject, email_content, "donation", donation.id)
+        
+        # Update sent status
+        await db.donations.update_one(
+            {"id": donation.id},
+            {"$set": {"whatsapp_sent": whatsapp_sent, "email_sent": email_sent}}
+        )
+        
+        # Create transaction record for dashboard
+        transaction = Transaction(
+            transaction_type="income",
+            category="Donation",
+            amount=amount,
+            currency="INR",
+            description=f"Donation from {donor_name} - {purpose}",
+            payment_method=payment_method,
+            related_type="donation",
+            related_id=donation.id,
+            created_by="system",
+            created_at=datetime.now(timezone.utc)
+        )
+        await db.transactions.insert_one(transaction.model_dump())
+        
+        return {
+            "success": True,
+            "message": "Donation received successfully!",
+            "donation_id": donation.id,
+            "receipt_number": receipt_number,
+            "receipt_pdf_url": f"/api/receipts/download/{receipt_number}",
+            "whatsapp_sent": whatsapp_sent,
+            "email_sent": email_sent
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process donation: {str(e)}")
+
+@router.get("/donations/list")
+async def list_donations(limit: int = 50):
+    """List all donations"""
+    try:
+        donations = await db.donations.find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        return {"donations": donations, "total": len(donations)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch donations: {str(e)}")
+
+# FEE PAYMENT ROUTES
+
+@router.post("/fees/pay")
+async def pay_fee(
+    student_id: str,
+    student_name: str,
+    parent_id: str,
+    parent_name: str,
+    parent_email: str,
+    parent_phone: str,
+    student_class: str,
+    fee_type: str,
+    amount: float,
+    payment_method: str,
+    academic_year: str,
+    term: str,
+    transaction_id: str = None
+):
+    """Process fee payment and generate PDF receipt"""
+    try:
+        # Generate receipt number
+        receipt_number = generate_receipt_number("FEE")
+        
+        # Create fee payment record
+        fee_payment = FeePayment(
+            student_id=student_id,
+            student_name=student_name,
+            parent_id=parent_id,
+            parent_name=parent_name,
+            parent_email=parent_email,
+            parent_phone=parent_phone,
+            student_class=student_class,
+            fee_type=fee_type,
+            amount=amount,
+            payment_method=payment_method,
+            transaction_id=transaction_id,
+            receipt_number=receipt_number,
+            receipt_pdf_path=f"/receipts/fees/{receipt_number}.pdf",
+            academic_year=academic_year,
+            term=term,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        # Generate PDF receipt
+        pdf_path = f"/app/backend/static/receipts/fees/{receipt_number}.pdf"
+        generate_fee_receipt(fee_payment.model_dump(), pdf_path)
+        
+        # Save fee payment to database
+        await db.fee_payments.insert_one(fee_payment.model_dump())
+        
+        # Send WhatsApp to Parent (mock)
+        parent_whatsapp = f"🏆 WINGS GLOBAL EDU-SKILL HUB\n\nDear {parent_name},\n\nFee payment received for {student_name} (Class {student_class})!\n\nAmount: ₹{amount:,.2f}\nFee Type: {fee_type}\nReceipt: {receipt_number}\n\nThank you!"
+        whatsapp_sent_parent = await send_whatsapp_mock(parent_phone, parent_whatsapp, "fee", fee_payment.id)
+        
+        # Send Email to Parent (mock)
+        email_subject = f"Fee Payment Receipt - {student_name}"
+        email_content = f"""
+        <html>
+        <body style="font-family: Arial; background: linear-gradient(135deg, #C41E3A, #FFD700); padding: 20px;">
+            <div style="background: white; padding: 30px; border-radius: 10px; max-width: 600px; margin: auto;">
+                <h1 style="color: #C41E3A; text-align: center;">🏆 WINGS GLOBAL EDU-SKILL HUB</h1>
+                <h2 style="color: #FFD700; text-align: center;">Fee Payment Receipt</h2>
+                <p>Dear <strong>{parent_name}</strong>,</p>
+                <p>Fee payment received successfully!</p>
+                <table style="width: 100%; margin: 20px 0; border-collapse: collapse;">
+                    <tr style="background: #FFF8DC;">
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Student:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">{student_name}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Class:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">{student_class}</td>
+                    </tr>
+                    <tr style="background: #FFF8DC;">
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Fee Type:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">{fee_type}</td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Amount:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">₹{amount:,.2f}</td>
+                    </tr>
+                    <tr style="background: #FFF8DC;">
+                        <td style="padding: 10px; border: 1px solid #FFD700;"><strong>Receipt No:</strong></td>
+                        <td style="padding: 10px; border: 1px solid #FFD700;">{receipt_number}</td>
+                    </tr>
+                </table>
+                <p style="text-align: center; color: #666;">Your PDF receipt is attached.</p>
+                <p style="text-align: center; color: #C41E3A; font-weight: bold;">✨ Thank you for your payment! ✨</p>
+            </div>
+        </body>
+        </html>
+        """
+        email_sent_parent = await send_email_mock(parent_email, email_subject, email_content, "fee", fee_payment.id)
+        
+        # Update sent status
+        await db.fee_payments.update_one(
+            {"id": fee_payment.id},
+            {"$set": {
+                "whatsapp_sent_parent": whatsapp_sent_parent,
+                "email_sent_parent": email_sent_parent
+            }}
+        )
+        
+        # Create transaction record for dashboard
+        transaction = Transaction(
+            transaction_type="income",
+            category="Fee",
+            amount=amount,
+            currency="INR",
+            description=f"Fee payment - {student_name} ({student_class}) - {fee_type}",
+            payment_method=payment_method,
+            related_type="fee",
+            related_id=fee_payment.id,
+            created_by="system",
+            created_at=datetime.now(timezone.utc)
+        )
+        await db.transactions.insert_one(transaction.model_dump())
+        
+        return {
+            "success": True,
+            "message": "Fee payment processed successfully!",
+            "payment_id": fee_payment.id,
+            "receipt_number": receipt_number,
+            "receipt_pdf_url": f"/api/receipts/download/{receipt_number}",
+            "whatsapp_sent": whatsapp_sent_parent,
+            "email_sent": email_sent_parent
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process fee payment: {str(e)}")
+
+@router.get("/fees/history/{parent_id}")
+async def get_fee_history(parent_id: str, limit: int = 50):
+    """Get fee payment history for parent dashboard"""
+    try:
+        payments = await db.fee_payments.find(
+            {"parent_id": parent_id},
+            {"_id": 0}
+        ).sort("created_at", -1).limit(limit).to_list(limit)
+        
+        total_paid = sum(p.get("amount", 0) for p in payments)
+        
+        return {
+            "payments": payments,
+            "total_payments": len(payments),
+            "total_paid": total_paid
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch fee history: {str(e)}")
+
+# RECEIPT DOWNLOAD
+
+
+async def download_receipt(receipt_number: str):
+    """Download PDF receipt"""
+    try:
+        # Check if donation receipt
+        pdf_path = f"/app/backend/static/receipts/donations/{receipt_number}.pdf"
+        if os.path.exists(pdf_path):
+            return FileResponse(
+                pdf_path,
+                media_type="application/pdf",
+                filename=f"{receipt_number}.pdf"
+            )
+        
+        # Check if fee receipt
+        pdf_path = f"/app/backend/static/receipts/fees/{receipt_number}.pdf"
+        if os.path.exists(pdf_path):
+            return FileResponse(
+                pdf_path,
+                media_type="application/pdf",
+                filename=f"{receipt_number}.pdf"
+            )
+        
+        raise HTTPException(status_code=404, detail="Receipt not found")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to download receipt: {str(e)}")
+
+# DASHBOARD ROUTES
+
+@router.get("/transactions/income-expenses")
+async def get_income_expenses(
+    start_date: str = None,
+    end_date: str = None,
+    category: str = None,
+    limit: int = 100
+):
+    """Get all transactions for Hidden Head Dashboard"""
+    try:
+        query = {}
+        
+        if category:
+            query["category"] = category
+        
+        if start_date and end_date:
+            query["created_at"] = {
+                "$gte": datetime.fromisoformat(start_date),
+                "$lte": datetime.fromisoformat(end_date)
+            }
+        
+        transactions = await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        
+        # Calculate totals
+        total_income = sum(t.get("amount", 0) for t in transactions if t.get("transaction_type") == "income")
+        total_expense = sum(t.get("amount", 0) for t in transactions if t.get("transaction_type") == "expense")
+        net_balance = total_income - total_expense
+        
+        # Group by category
+        by_category = {}
+        for t in transactions:
+            cat = t.get("category", "Other")
+            if cat not in by_category:
+                by_category[cat] = {"income": 0, "expense": 0, "count": 0}
+            
+            if t.get("transaction_type") == "income":
+                by_category[cat]["income"] += t.get("amount", 0)
+            else:
+                by_category[cat]["expense"] += t.get("amount", 0)
+            
+            by_category[cat]["count"] += 1
+        
+        return {
+            "transactions": transactions,
+            "total_transactions": len(transactions),
+            "summary": {
+                "total_income": total_income,
+                "total_expense": total_expense,
+                "net_balance": net_balance
+            },
+            "by_category": by_category
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch transactions: {str(e)}")
+
+@router.get("/messaging/logs")
+async def get_messaging_logs(limit: int = 100):
+    """Get all WhatsApp/Email logs"""
+    try:
+        logs = await db.messaging_logs.find({}, {"_id": 0}).sort("sent_at", -1).limit(limit).to_list(limit)
+        return {"logs": logs, "total": len(logs)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")

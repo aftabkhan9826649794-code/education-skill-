@@ -361,3 +361,80 @@ class SkillQuizAttempt(BaseModel):
     score_percentage: float
     badge_earned: bool
     attempted_at: datetime
+
+# Automated Financial Receipt System Models
+class Donation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    donor_type: str  # "Trust", "Company", "Person"
+    donor_name: str
+    donor_email: str
+    donor_phone: str
+    donor_address: Optional[str] = None
+    amount: float
+    currency: str = "INR"
+    payment_method: str  # "UPI", "Card", "NetBanking", "Cash"
+    transaction_id: Optional[str] = None
+    purpose: str  # "General Donation", "Scholarship Fund", "Infrastructure"
+    receipt_number: str
+    receipt_pdf_path: str
+    payment_status: str = "completed"  # "pending", "completed", "failed"
+    whatsapp_sent: bool = False
+    email_sent: bool = False
+    created_at: datetime
+    
+class FeePayment(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    student_name: str
+    parent_id: str
+    parent_name: str
+    parent_email: str
+    parent_phone: str
+    student_class: str
+    fee_type: str  # "Tuition", "Exam", "Library", "Transport", "Other"
+    amount: float
+    currency: str = "INR"
+    payment_method: str
+    transaction_id: Optional[str] = None
+    receipt_number: str
+    receipt_pdf_path: str
+    payment_status: str = "completed"
+    academic_year: str
+    term: str  # "Q1", "Q2", "Q3", "Q4", "Annual"
+    whatsapp_sent_student: bool = False
+    whatsapp_sent_parent: bool = False
+    email_sent_student: bool = False
+    email_sent_parent: bool = False
+    created_at: datetime
+
+class Receipt(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    receipt_number: str
+    receipt_type: str  # "donation", "fee"
+    related_id: str  # donation_id or fee_payment_id
+    pdf_path: str
+    generated_at: datetime
+
+class MessagingLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    message_type: str  # "whatsapp", "email"
+    recipient: str  # phone or email
+    subject: Optional[str] = None
+    content: str
+    status: str  # "sent", "failed", "pending"
+    related_type: str  # "donation", "fee"
+    related_id: str
+    sent_at: datetime
+
+class Transaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    transaction_type: str  # "income", "expense"
+    category: str  # "Donation", "Fee", "Salary", "Infrastructure"
+    amount: float
+    currency: str = "INR"
+    description: str
+    payment_method: str
+    related_type: Optional[str] = None  # "donation", "fee"
+    related_id: Optional[str] = None
+    created_by: str  # admin_id
+    created_at: datetime
