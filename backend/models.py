@@ -104,6 +104,34 @@ class ExamSchedule(BaseModel):
 
 class ExamScheduleCreate(BaseModel):
     exam_type: str
+
+
+# Education Board System Models
+class EducationBoard(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    board_name: str  # "CBSE", "ICSE", "State", "IB", "Cambridge"
+    country: str
+    education_mode: str  # "Regular", "Distance", "Private"
+    class_level: str  # "Nursery", "1-12", "Diploma", "Degree", "Masters", "PhD"
+
+class CourseModule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    board_name: str
+    class_level: str
+    subject: str
+    topic: str
+    module_name: str
+    pdf_url: Optional[str] = None
+    video_url: Optional[str] = None
+    created_at: datetime
+
+class ClassDashboard(BaseModel):
+    board_name: str
+    education_mode: str
+    class_level: str
+    subjects: List[str]
+    modules: List[dict]
+
     subject: str
     class_name: str
     scheduled_date: str  # ISO format

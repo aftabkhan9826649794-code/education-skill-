@@ -623,6 +623,25 @@ COMPETITIVE_EXAM_TOPICS = {
         "Chemistry": ["Physical Chemistry", "Organic Chemistry", "Inorganic Chemistry"],
         "Mathematics": ["Calculus", "Algebra", "Coordinate Geometry", "Trigonometry", "Probability"]
     },
+    "NEET": {
+        "Physics": ["Mechanics", "Thermodynamics", "Optics", "Modern Physics", "Electronics"],
+        "Chemistry": ["Physical Chemistry", "Organic Chemistry", "Inorganic Chemistry", "Biochemistry"],
+        "Biology": ["Botany", "Zoology", "Human Physiology", "Genetics", "Ecology"]
+    },
+    "CUET": {
+        "General Test": ["Quantitative Reasoning", "Logical Reasoning", "General Awareness", "English"],
+        "Domain Specific": ["Humanities", "Science", "Commerce", "Languages"]
+    },
+    "UPSC": {
+        "Prelims": ["Indian Polity", "Indian Economy", "History", "Geography", "Science & Technology", "Current Affairs"],
+        "Mains": ["Essay", "General Studies", "Optional Subjects"]
+    },
+    "SSC": {
+        "Quantitative Aptitude": ["Arithmetic", "Algebra", "Geometry", "Data Interpretation"],
+        "Reasoning": ["Verbal Reasoning", "Non-Verbal Reasoning", "Analytical Reasoning"],
+        "English": ["Grammar", "Vocabulary", "Comprehension"],
+        "General Awareness": ["Current Affairs", "Indian History", "Geography", "Science"]
+    },
     "GRE": {
         "Quantitative": ["Arithmetic", "Algebra", "Geometry", "Data Analysis"],
         "Verbal": ["Reading Comprehension", "Text Completion", "Sentence Equivalence"],
@@ -633,6 +652,26 @@ COMPETITIVE_EXAM_TOPICS = {
         "Verbal": ["Critical Reasoning", "Reading Comprehension", "Sentence Correction"],
         "Integrated Reasoning": ["Graphics Interpretation", "Table Analysis"],
         "Analytical Writing": ["Analysis of Argument"]
+    },
+    "IELTS": {
+        "Listening": ["Section 1", "Section 2", "Section 3", "Section 4"],
+        "Reading": ["Academic Reading", "General Reading"],
+        "Writing": ["Task 1", "Task 2"],
+        "Speaking": ["Part 1", "Part 2", "Part 3"]
+    },
+    "TOEFL": {
+        "Reading": ["Academic Passages", "Vocabulary in Context"],
+        "Listening": ["Conversations", "Lectures"],
+        "Speaking": ["Independent Tasks", "Integrated Tasks"],
+        "Writing": ["Integrated Writing", "Independent Writing"]
+    },
+    "NET": {
+        "Paper 1": ["Teaching Aptitude", "Research Aptitude", "Comprehension", "Communication", "Reasoning"],
+        "Paper 2": ["Subject Specific Topics"]
+    },
+    "GATE": {
+        "Engineering Mathematics": ["Linear Algebra", "Calculus", "Probability", "Differential Equations"],
+        "Core Subjects": ["Computer Science", "Electronics", "Mechanical", "Civil", "Electrical"]
     },
     "PhD": {
         "Research Methodology": ["Qualitative Methods", "Quantitative Methods", "Mixed Methods"],
@@ -876,6 +915,222 @@ async def update_job_readiness_metrics(student_id: str, exam_type: str, score: f
     
     except Exception as e:
         print(f"Error updating job readiness metrics: {str(e)}")
+
+# =====================
+# EDUCATION BOARD SYSTEM
+# =====================
+
+# Education Board Structure
+EDUCATION_BOARDS = {
+    "CBSE": {
+        "country": "India",
+        "modes": ["Regular", "Distance", "Private"],
+        "classes": {
+            "Nursery": ["Play Group", "LKG", "UKG"],
+            "Primary": ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"],
+            "Middle": ["Class 6", "Class 7", "Class 8"],
+            "Secondary": ["Class 9", "Class 10"],
+            "Senior Secondary": ["Class 11", "Class 12"]
+        },
+        "subjects": {
+            "Primary": ["English", "Hindi", "Mathematics", "EVS", "Computer Science", "Art & Craft"],
+            "Middle": ["English", "Hindi", "Mathematics", "Science", "Social Studies", "Computer Science", "Sanskrit"],
+            "Secondary": ["English", "Hindi", "Mathematics", "Science", "Social Science", "Computer Science", "Sanskrit"],
+            "Senior Secondary": {
+                "Science": ["Physics", "Chemistry", "Mathematics", "Biology", "Computer Science", "English"],
+                "Commerce": ["Accountancy", "Business Studies", "Economics", "English", "Mathematics"],
+                "Arts": ["History", "Political Science", "Economics", "English", "Psychology", "Sociology"]
+            }
+        }
+    },
+    "ICSE": {
+        "country": "India",
+        "modes": ["Regular", "Private"],
+        "classes": {
+            "Primary": ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"],
+            "Middle": ["Class 6", "Class 7", "Class 8"],
+            "Secondary": ["Class 9", "Class 10"],
+            "ISC": ["Class 11", "Class 12"]
+        },
+        "subjects": {
+            "Primary": ["English", "Mathematics", "Science", "Social Studies", "Computer Applications"],
+            "Secondary": ["English", "Mathematics", "Science", "History & Civics", "Geography", "Computer Applications"]
+        }
+    },
+    "State Board": {
+        "country": "India",
+        "modes": ["Regular", "Distance"],
+        "classes": {
+            "Primary": ["Class 1", "Class 2", "Class 3", "Class 4", "Class 5"],
+            "Middle": ["Class 6", "Class 7", "Class 8"],
+            "Secondary": ["Class 9", "Class 10"],
+            "Higher Secondary": ["Class 11", "Class 12"]
+        }
+    },
+    "IB": {
+        "country": "International",
+        "modes": ["Regular"],
+        "classes": {
+            "PYP": ["Ages 3-12"],
+            "MYP": ["Ages 11-16"],
+            "DP": ["Ages 16-19"]
+        }
+    },
+    "Cambridge": {
+        "country": "International",
+        "modes": ["Regular", "Private"],
+        "classes": {
+            "Primary": ["Year 1-6"],
+            "Secondary": ["Year 7-11 (IGCSE)"],
+            "Advanced": ["Year 12-13 (A-Levels)"]
+        }
+    }
+}
+
+@router.get("/boards/all")
+async def get_all_boards():
+    """Get all education boards with their structure"""
+    return {"boards": EDUCATION_BOARDS}
+
+@router.get("/boards/{board_name}")
+async def get_board_details(board_name: str):
+    """Get details of a specific education board"""
+    try:
+        if board_name not in EDUCATION_BOARDS:
+            raise HTTPException(status_code=404, detail="Board not found")
+        
+        return {
+            "board_name": board_name,
+            "details": EDUCATION_BOARDS[board_name]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching board details: {str(e)}")
+
+@router.get("/boards/{board_name}/{education_mode}/{class_level}")
+async def get_class_dashboard(board_name: str, education_mode: str, class_level: str):
+    """Get class dashboard with subjects and modules"""
+    try:
+        if board_name not in EDUCATION_BOARDS:
+            raise HTTPException(status_code=404, detail="Board not found")
+        
+        board_data = EDUCATION_BOARDS[board_name]
+        
+        # Get subjects for the class level
+        subjects = []
+        if "subjects" in board_data:
+            for level, subject_list in board_data["subjects"].items():
+                if level.lower() in class_level.lower():
+                    subjects = subject_list if isinstance(subject_list, list) else list(subject_list.keys())
+                    break
+        
+        # Generate mock modules (in real app, fetch from database)
+        modules = []
+        for subject in subjects:
+            modules.append({
+                "subject": subject,
+                "topics": [
+                    f"{subject} - Chapter 1",
+                    f"{subject} - Chapter 2",
+                    f"{subject} - Chapter 3"
+                ],
+                "has_pdf": True,
+                "has_video": True
+            })
+        
+        return {
+            "board_name": board_name,
+            "education_mode": education_mode,
+            "class_level": class_level,
+            "subjects": subjects,
+            "modules": modules,
+            "competitive_mode_enabled": True
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching class dashboard: {str(e)}")
+
+@router.post("/boards/generate-topic-quiz")
+async def generate_topic_quiz(
+    board_name: str,
+    class_level: str,
+    subject: str,
+    topic: str,
+    num_questions: int = 10,
+    difficulty: str = "medium"
+):
+    """Generate AI quiz for any board syllabus topic"""
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="LLM API key not configured")
+        
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"board_quiz_{board_name}_{subject}_{datetime.now().timestamp()}",
+            system_message=f"You are an expert {board_name} board exam question generator for {class_level}. Generate curriculum-aligned questions."
+        ).with_model("openai", "gpt-5.2")
+        
+        prompt = f"""Generate {num_questions} {difficulty} difficulty MCQ questions for {board_name} board students.
+Class: {class_level}
+Subject: {subject}
+Topic: {topic}
+
+Questions should be:
+- Aligned with {board_name} curriculum
+- Appropriate for {class_level} students
+- Cover conceptual understanding
+
+Return ONLY valid JSON in this format:
+{{
+  "questions": [
+    {{
+      "question": "Question text?",
+      "options": ["A", "B", "C", "D"],
+      "correct_answer": 0,
+      "rationale": "Detailed explanation with why correct answer is right and why others are wrong."
+    }}
+  ]
+}}"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse JSON
+        try:
+            response_text = response.strip()
+            if "```json" in response_text:
+                response_text = response_text.split("```json")[1].split("```")[0].strip()
+            elif "```" in response_text:
+                response_text = response_text.split("```")[1].split("```")[0].strip()
+            
+            quiz_data = json.loads(response_text)
+            
+            return {
+                "board_name": board_name,
+                "class_level": class_level,
+                "subject": subject,
+                "topic": topic,
+                "difficulty": difficulty,
+                "questions": quiz_data.get("questions", []),
+                "total_questions": len(quiz_data.get("questions", []))
+            }
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=500, detail=f"Failed to parse AI response: {str(e)}")
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate topic quiz: {str(e)}")
+
+# Competitive Exam Categories
+EXAM_CATEGORIES = {
+    "National (India)": ["JEE", "NEET", "CUET", "UPSC", "SSC"],
+    "International": ["SAT", "GRE", "GMAT", "IELTS", "TOEFL"],
+    "Research/PhD": ["NET", "GATE", "PhD"]
+}
+
+@router.get("/competitive/categories")
+async def get_competitive_categories():
+    """Get categorized competitive exams"""
+    return {"categories": EXAM_CATEGORIES}
+
 
 @router.get("/competitive/attempts/student/{student_id}")
 async def get_student_competitive_attempts(student_id: str, exam_type: str = None):
