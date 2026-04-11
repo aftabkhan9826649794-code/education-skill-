@@ -200,7 +200,6 @@ const AITutor = () => {
                   <span className="text-gold text-xs font-bold">SARA</span>
                 </div>
               </div>
-              </div>
 
               <div className="flex-1 min-w-[280px] mt-8">
                 <h1 className="text-4xl font-black mb-3">

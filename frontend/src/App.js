@@ -7,6 +7,14 @@ import Contact from './pages/Contact';
 import Dashboard from './pages/Dashboard';
 import VideoLessonCreator from './pages/VideoLessonCreator';
 import SecureExam from './pages/SecureExam';
+import MathLesson from './pages/MathLesson';
+import Marks from './pages/Marks';
+import Login from './pages/Login';
+import Library from './pages/Library';
+import LearningHub from './pages/LearningHub';
+import Leaderboard from './pages/Leaderboard';
+import InternationalBoard from './pages/InternationalBoard';
+import InteractiveLesson from './pages/InteractiveLesson';
 import './App.css';
 
 function App() {
@@ -21,6 +29,14 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/video-creator" element={<VideoLessonCreator />} />
         <Route path="/secure-exam" element={<SecureExam />} />
+        <Route path="/math-lesson" element={<MathLesson />} />
+        <Route path="/marks" element={<Marks />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/library" element={<Library />} />
+        <Route path="/learning-hub" element={<LearningHub />} />
+        <Route path="/leaderboard" element={<Leaderboard />} />
+        <Route path="/international-board" element={<InternationalBoard />} />
+        <Route path="/interactive-lesson" element={<InteractiveLesson />} />
       </Routes>
     </BrowserRouter>
   );
