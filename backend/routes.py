@@ -6,7 +6,11 @@ from models import (
     GeneratedContent, ContentGenerateRequest,
     ParentNotification, NotificationCreate,
     ProgressReport, ProgressReportCreate,
-    Student, StudentCreate
+    Student, StudentCreate,
+    ExamSchedule, ExamScheduleCreate,
+    ExamResult, ExamResultCreate,
+    SkillRecommendation,
+    ResearchProject, ResearchProjectCreate
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
@@ -313,3 +317,287 @@ async def get_student(student_id: str):
         return student
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch student: {str(e)}")
+
+
+
+# =====================
+# EXAM SCHEDULING ROUTES
+# =====================
+
+@router.post("/exams/schedule", response_model=ExamSchedule)
+async def schedule_exam(exam: ExamScheduleCreate):
+    """Schedule an exam (weekly, monthly, half-yearly, final)"""
+    try:
+        exam_dict = exam.model_dump()
+        exam_dict['scheduled_date'] = datetime.fromisoformat(exam.scheduled_date).isoformat()
+        exam_dict['created_at'] = datetime.now(timezone.utc).isoformat()
+        
+        exam_obj = ExamSchedule(**exam_dict)
+        await db.exam_schedules.insert_one(exam_obj.model_dump())
+        
+        return exam_obj
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to schedule exam: {str(e)}")
+
+@router.get("/exams/schedule/{class_name}")
+async def get_exam_schedule(class_name: str, exam_type: str = None):
+    """Get exam schedule for a class"""
+    try:
+        query = {"class_name": class_name}
+        if exam_type:
+            query["exam_type"] = exam_type
+        
+        exams = await db.exam_schedules.find(query, {"_id": 0}).sort("scheduled_date", 1).to_list(50)
+        return {"exams": exams, "total": len(exams)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch exam schedule: {str(e)}")
+
+@router.post("/exams/submit", response_model=ExamResult)
+async def submit_exam_result(result: ExamResultCreate):
+    """Submit exam result and trigger weak topic detection"""
+    try:
+        result_dict = result.model_dump()
+        result_dict['percentage'] = (result.score / result.total) * 100 if result.total > 0 else 0
+        result_dict['submitted_at'] = datetime.now(timezone.utc).isoformat()
+        
+        exam_result_obj = ExamResult(**result_dict)
+        await db.exam_results.insert_one(exam_result_obj.model_dump())
+        
+        # Create progress report for weak topic detection
+        progress = ProgressReportCreate(
+            student_id=result.student_id,
+            subject="Exam",
+            topic=result.exam_id,
+            score=result.score,
+            total=result.total,
+            weak_areas=result.weak_topics
+        )
+        await create_progress_report(progress)
+        
+        return exam_result_obj
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to submit exam result: {str(e)}")
+
+@router.get("/exams/results/student/{student_id}")
+async def get_student_exam_results(student_id: str):
+    """Get all exam results for a student"""
+    try:
+        results = await db.exam_results.find(
+            {"student_id": student_id},
+            {"_id": 0}
+        ).sort("submitted_at", -1).to_list(50)
+        return {"results": results, "total": len(results)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch exam results: {str(e)}")
+
+@router.post("/exams/auto-generate-quiz")
+async def auto_generate_post_lesson_quiz(subject: str, topic: str, class_name: str):
+    """Automatically generate 10 MCQ quiz after lesson completion"""
+    try:
+        # Generate quiz using content generation system
+        request = ContentGenerateRequest(
+            content_type="quiz",
+            subject=subject,
+            topic=topic,
+            for_class=class_name,
+            difficulty="medium"
+        )
+        
+        generated_quiz = await generate_content(request)
+        
+        return {
+            "message": "Quiz auto-generated successfully",
+            "quiz_id": generated_quiz.id,
+            "quiz_data": generated_quiz.content
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to auto-generate quiz: {str(e)}")
+
+# =====================
+# GLOBAL RESOURCE ROUTER
+# =====================
+
+# Job market data for different regions
+GLOBAL_SKILL_MAP = {
+    "India": {
+        "skills": ["Coding & Programming", "Data Science", "AI & ML", "Cloud Computing", "Cybersecurity"],
+        "trend": "IT and Software Development dominate India's job market with high demand for AI/ML specialists",
+        "priority": "high"
+    },
+    "Sudan": {
+        "skills": ["Agri-Tech & Smart Farming", "Water Management", "Renewable Energy", "Healthcare Tech"],
+        "trend": "Agriculture modernization and sustainable resource management are critical growth areas",
+        "priority": "high"
+    },
+    "UAE": {
+        "skills": ["Blockchain & FinTech", "Smart Cities Tech", "Renewable Energy", "Tourism Tech", "Aviation"],
+        "trend": "UAE focuses on technology-driven economy with emphasis on sustainability and innovation",
+        "priority": "high"
+    },
+    "USA": {
+        "skills": ["Software Engineering", "Biotechnology", "Aerospace", "Robotics", "Quantum Computing"],
+        "trend": "Advanced technology sectors with focus on innovation and research",
+        "priority": "high"
+    },
+    "UK": {
+        "skills": ["Financial Technology", "AI Research", "Creative Industries", "Healthcare Innovation"],
+        "trend": "Strong focus on fintech, creative tech, and medical research",
+        "priority": "high"
+    },
+    "Assam": {
+        "skills": ["Tea Plantation Tech", "Tourism Management", "Renewable Energy", "E-commerce", "Digital Marketing"],
+        "trend": "Regional focus on agricultural technology and tourism with growing digital economy",
+        "priority": "medium"
+    }
+}
+
+@router.get("/global/skills/recommend/{country}")
+async def recommend_skills_by_location(country: str, region: str = None):
+    """Get skill recommendations based on geographical location and job market"""
+    try:
+        # Check if country exists in our mapping
+        if country in GLOBAL_SKILL_MAP:
+            skill_data = GLOBAL_SKILL_MAP[country]
+        else:
+            # Default global skills
+            skill_data = {
+                "skills": ["Digital Literacy", "Communication", "Problem Solving", "Critical Thinking"],
+                "trend": "Universal skills applicable globally",
+                "priority": "medium"
+            }
+        
+        recommendation = SkillRecommendation(
+            country=country,
+            region=region,
+            recommended_skills=skill_data["skills"],
+            job_market_trend=skill_data["trend"],
+            priority=skill_data["priority"]
+        )
+        
+        return recommendation
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get skill recommendations: {str(e)}")
+
+@router.get("/global/skills/all")
+async def get_all_skill_mappings():
+    """Get all available skill mappings for different regions"""
+    return {"skill_mappings": GLOBAL_SKILL_MAP}
+
+# =====================
+# RESEARCH PORTAL (PhD Level)
+# =====================
+
+@router.post("/research/create", response_model=ResearchProject)
+async def create_research_project(project: ResearchProjectCreate):
+    """Create a new research project"""
+    try:
+        project_dict = project.model_dump()
+        project_dict['created_at'] = datetime.now(timezone.utc).isoformat()
+        project_dict['status'] = "proposal"
+        
+        project_obj = ResearchProject(**project_dict)
+        await db.research_projects.insert_one(project_obj.model_dump())
+        
+        return project_obj
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create research project: {str(e)}")
+
+@router.get("/research/list")
+async def list_research_projects(field: str = None, status: str = None):
+    """List research projects"""
+    try:
+        query = {}
+        if field:
+            query["field"] = field
+        if status:
+            query["status"] = status
+        
+        projects = await db.research_projects.find(query, {"_id": 0}).sort("created_at", -1).limit(50).to_list(50)
+        return {"projects": projects, "total": len(projects)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to list research projects: {str(e)}")
+
+@router.post("/research/ai-assistant")
+async def research_ai_assistant(query: str, field: str):
+    """AI Research Assistant for PhD students"""
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="LLM API key not configured")
+        
+        # Initialize LLM chat for research assistance
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"research_{field}_{datetime.now().timestamp()}",
+            system_message=f"You are an expert research assistant specializing in {field}. Provide detailed, academic-level responses with proper citations and methodological guidance."
+        ).with_model("openai", "gpt-5.2")
+        
+        prompt = f"""Research Query in {field}:
+{query}
+
+Provide a comprehensive research-oriented response including:
+1. Current state of research in this area
+2. Relevant methodologies
+3. Key papers and researchers to review
+4. Potential research gaps
+5. Suggested approach"""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        return {
+            "query": query,
+            "field": field,
+            "ai_response": response,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI Research Assistant error: {str(e)}")
+
+# =====================
+# MULTI-LINGUAL CONTENT GENERATION
+# =====================
+
+@router.post("/content/generate-multilingual")
+async def generate_multilingual_content(
+    content_type: str,
+    subject: str,
+    topic: str,
+    for_class: str,
+    language: str = "English"
+):
+    """Generate educational content in multiple languages"""
+    try:
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="LLM API key not configured")
+        
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"multilang_{language}_{datetime.now().timestamp()}",
+            system_message=f"You are an educational content generator. Generate high-quality content in {language}."
+        ).with_model("openai", "gpt-5.2")
+        
+        prompt = f"""Generate {content_type} for Class {for_class} students in {language}.
+Subject: {subject}
+Topic: {topic}
+
+Create content appropriate for {language}-speaking students. Use culturally relevant examples."""
+        
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        generated_content = GeneratedContent(
+            content_type=content_type,
+            subject=subject,
+            topic=f"{topic} ({language})",
+            content={"language": language, "text": response},
+            generated_at=datetime.now(timezone.utc),
+            for_class=for_class
+        )
+        
+        await db.generated_content.insert_one(generated_content.model_dump())
+        
+        return generated_content
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to generate multilingual content: {str(e)}")

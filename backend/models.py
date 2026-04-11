@@ -90,3 +90,69 @@ class StudentCreate(BaseModel):
     class_name: str
     student_id_number: str
     parent_id: str
+
+# Exam Schedule Model
+class ExamSchedule(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    exam_type: str  # "weekly", "monthly", "half_yearly", "final"
+    subject: str
+    class_name: str
+    scheduled_date: datetime
+    duration_minutes: int
+    total_marks: int
+    created_at: datetime
+
+class ExamScheduleCreate(BaseModel):
+    exam_type: str
+    subject: str
+    class_name: str
+    scheduled_date: str  # ISO format
+    duration_minutes: int
+    total_marks: int
+
+# Exam Result Model
+class ExamResult(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    exam_id: str
+    score: float
+    total: float
+    percentage: float
+    weak_topics: List[str]
+    submitted_at: datetime
+    answers: Optional[dict] = None
+
+class ExamResultCreate(BaseModel):
+    student_id: str
+    exam_id: str
+    score: float
+    total: float
+    weak_topics: List[str]
+    answers: Optional[dict] = None
+
+# Global Skill Recommendation Model
+class SkillRecommendation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    country: str
+    region: Optional[str] = None
+    recommended_skills: List[str]
+    job_market_trend: str
+    priority: str  # "high", "medium", "low"
+
+# Research Project Model (PhD Portal)
+class ResearchProject(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    researcher_id: str
+    field: str
+    description: str
+    status: str  # "proposal", "ongoing", "completed"
+    created_at: datetime
+    keywords: List[str]
+
+class ResearchProjectCreate(BaseModel):
+    title: str
+    researcher_id: str
+    field: str
+    description: str
+    keywords: List[str]
