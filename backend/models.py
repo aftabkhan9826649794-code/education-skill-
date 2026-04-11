@@ -132,6 +132,54 @@ class ClassDashboard(BaseModel):
     subjects: List[str]
     modules: List[dict]
 
+# Live Surveillance System Models
+class ParentUser(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    parent_id: str
+    name: str
+    email: str
+    phone: str
+    linked_students: List[str]  # List of student_ids
+    created_at: datetime
+
+class SuperAdmin(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    admin_id: str
+    name: str
+    email: str
+    access_level: str = "master"  # Full access to everything
+    created_at: datetime
+
+class ClassroomFeed(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    classroom_id: str
+    board_name: str
+    class_level: str
+    section: str
+    stream_url: str  # Encrypted stream URL
+    is_active: bool
+    students_enrolled: List[str]  # List of student_ids
+    created_at: datetime
+
+class StreamAccessToken(BaseModel):
+    token: str
+    user_id: str
+    user_role: str  # "parent" or "super_admin"
+    classroom_id: str
+    expires_at: datetime
+    created_at: datetime
+
+class AuditLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    user_role: str  # "parent" or "super_admin"
+    action: str  # "view_feed", "access_denied", "login", "logout"
+    classroom_id: Optional[str] = None
+    student_id: Optional[str] = None
+    ip_address: Optional[str] = None
+    timestamp: datetime
+    details: Optional[dict] = None
+
     subject: str
     class_name: str
     scheduled_date: str  # ISO format

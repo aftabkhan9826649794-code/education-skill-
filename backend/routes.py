@@ -13,7 +13,8 @@ from models import (
     SkillRecommendation,
     ResearchProject, ResearchProjectCreate,
     CompetitiveExamQuestion, CompetitiveExamAttempt, CompetitiveExamAttemptCreate,
-    JobReadinessMetrics
+    JobReadinessMetrics,
+    ParentUser, SuperAdmin, ClassroomFeed, StreamAccessToken, AuditLog
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
@@ -1130,6 +1131,351 @@ EXAM_CATEGORIES = {
 async def get_competitive_categories():
     """Get categorized competitive exams"""
     return {"categories": EXAM_CATEGORIES}
+
+
+# =====================
+# SECURE LIVE SURVEILLANCE SYSTEM
+# =====================
+
+import secrets
+import hashlib
+from datetime import timedelta
+
+def generate_secure_token(user_id: str, classroom_id: str) -> str:
+    """Generate secure encrypted token for stream access"""
+    random_data = secrets.token_urlsafe(32)
+    token_string = f"{user_id}:{classroom_id}:{random_data}:{datetime.now(timezone.utc).timestamp()}"
+    return hashlib.sha256(token_string.encode()).hexdigest()
+
+async def log_audit(user_id: str, user_role: str, action: str, classroom_id: str = None, student_id: str = None, ip_address: str = None, details: dict = None):
+    """Log all surveillance access for accountability"""
+    try:
+        audit_entry = AuditLog(
+            user_id=user_id,
+            user_role=user_role,
+            action=action,
+            classroom_id=classroom_id,
+            student_id=student_id,
+            ip_address=ip_address,
+            timestamp=datetime.now(timezone.utc),
+            details=details or {}
+        )
+        await db.audit_logs.insert_one(audit_entry.model_dump())
+    except Exception as e:
+        print(f"Audit log error: {str(e)}")
+
+# Parent Management
+@router.post("/surveillance/parent/register")
+async def register_parent(name: str, email: str, phone: str, student_ids: List[str]):
+    """Register a parent with linked students"""
+    try:
+        parent_id = str(uuid.uuid4())
+        parent = ParentUser(
+            parent_id=parent_id,
+            name=name,
+            email=email,
+            phone=phone,
+            linked_students=student_ids,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        await db.parent_users.insert_one(parent.model_dump())
+        await log_audit(parent_id, "parent", "registration", details={"email": email})
+        
+        return {"message": "Parent registered successfully", "parent_id": parent_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+@router.get("/surveillance/parent/{parent_id}/students")
+async def get_parent_students(parent_id: str):
+    """Get list of students linked to a parent"""
+    try:
+        parent = await db.parent_users.find_one({"parent_id": parent_id}, {"_id": 0})
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent not found")
+        
+        # Get student details
+        students = []
+        for student_id in parent.get("linked_students", []):
+            student = await db.students.find_one({"id": student_id}, {"_id": 0})
+            if student:
+                students.append(student)
+        
+        return {"parent_id": parent_id, "students": students}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch students: {str(e)}")
+
+# Classroom Feed Management
+@router.post("/surveillance/classroom/register")
+async def register_classroom_feed(
+    classroom_id: str,
+    board_name: str,
+    class_level: str,
+    section: str,
+    stream_url: str,
+    student_ids: List[str]
+):
+    """Register a classroom live feed"""
+    try:
+        classroom_feed = ClassroomFeed(
+            classroom_id=classroom_id,
+            board_name=board_name,
+            class_level=class_level,
+            section=section,
+            stream_url=stream_url,
+            is_active=True,
+            students_enrolled=student_ids,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        await db.classroom_feeds.insert_one(classroom_feed.model_dump())
+        
+        return {"message": "Classroom feed registered", "classroom_id": classroom_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to register feed: {str(e)}")
+
+@router.get("/surveillance/classroom/all")
+async def get_all_classrooms():
+    """Get all registered classroom feeds (Super Admin only)"""
+    try:
+        classrooms = await db.classroom_feeds.find({"is_active": True}, {"_id": 0}).to_list(100)
+        return {"classrooms": classrooms, "total": len(classrooms)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch classrooms: {str(e)}")
+
+# Parent Access (Strict Isolation)
+@router.post("/surveillance/parent/request-access")
+async def parent_request_stream_access(parent_id: str, student_id: str, ip_address: str = None):
+    """Parent requests access to child's classroom feed (STRICT ISOLATION)"""
+    try:
+        # 1. Verify parent-student relationship
+        parent = await db.parent_users.find_one({"parent_id": parent_id}, {"_id": 0})
+        if not parent:
+            await log_audit(parent_id, "parent", "access_denied", student_id=student_id, ip_address=ip_address, details={"reason": "parent_not_found"})
+            raise HTTPException(status_code=403, detail="Access denied: Parent not found")
+        
+        if student_id not in parent.get("linked_students", []):
+            await log_audit(parent_id, "parent", "access_denied", student_id=student_id, ip_address=ip_address, details={"reason": "student_not_linked"})
+            raise HTTPException(status_code=403, detail="Access denied: Student not linked to this parent")
+        
+        # 2. Find classroom where student is enrolled
+        classroom = await db.classroom_feeds.find_one(
+            {"students_enrolled": student_id, "is_active": True},
+            {"_id": 0}
+        )
+        
+        if not classroom:
+            await log_audit(parent_id, "parent", "access_denied", student_id=student_id, ip_address=ip_address, details={"reason": "no_active_classroom"})
+            raise HTTPException(status_code=404, detail="No active classroom found for this student")
+        
+        # 3. Generate secure access token (expires in 2 hours)
+        token = generate_secure_token(parent_id, classroom["classroom_id"])
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=2)
+        
+        access_token = StreamAccessToken(
+            token=token,
+            user_id=parent_id,
+            user_role="parent",
+            classroom_id=classroom["classroom_id"],
+            expires_at=expires_at,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        await db.stream_tokens.insert_one(access_token.model_dump())
+        
+        # 4. Log successful access
+        await log_audit(
+            parent_id, 
+            "parent", 
+            "view_feed", 
+            classroom_id=classroom["classroom_id"],
+            student_id=student_id,
+            ip_address=ip_address,
+            details={
+                "classroom": f"{classroom['class_level']} - {classroom['section']}",
+                "token_expires": expires_at.isoformat()
+            }
+        )
+        
+        return {
+            "access_granted": True,
+            "token": token,
+            "expires_at": expires_at.isoformat(),
+            "classroom": {
+                "classroom_id": classroom["classroom_id"],
+                "class_level": classroom["class_level"],
+                "section": classroom["section"],
+                "board_name": classroom["board_name"]
+            },
+            "stream_url": f"/api/surveillance/stream/{token}",
+            "message": "Access granted for 2 hours"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        await log_audit(parent_id, "parent", "access_error", student_id=student_id, details={"error": str(e)})
+        raise HTTPException(status_code=500, detail=f"Access request failed: {str(e)}")
+
+# Super Admin Access (Full Access)
+@router.post("/surveillance/superadmin/login")
+async def superadmin_login(admin_email: str, admin_secret_key: str):
+    """Hidden Super Admin login (Master access)"""
+    try:
+        # Hardcoded super admin credentials (in production, use secure vault)
+        SUPER_ADMIN_EMAIL = "superadmin@wingsglobal.edu"
+        SUPER_ADMIN_SECRET = "WINGS_MASTER_2025_SECURE"
+        
+        if admin_email != SUPER_ADMIN_EMAIL or admin_secret_key != SUPER_ADMIN_SECRET:
+            await log_audit("unknown", "super_admin", "login_failed", details={"email": admin_email})
+            raise HTTPException(status_code=401, detail="Invalid super admin credentials")
+        
+        # Generate admin session
+        admin_id = "SUPER_ADMIN_MASTER"
+        token = generate_secure_token(admin_id, "ALL_ACCESS")
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=8)
+        
+        admin_token = StreamAccessToken(
+            token=token,
+            user_id=admin_id,
+            user_role="super_admin",
+            classroom_id="ALL",
+            expires_at=expires_at,
+            created_at=datetime.now(timezone.utc)
+        )
+        
+        await db.stream_tokens.insert_one(admin_token.model_dump())
+        await log_audit(admin_id, "super_admin", "login_success", details={"email": admin_email})
+        
+        return {
+            "access_granted": True,
+            "token": token,
+            "expires_at": expires_at.isoformat(),
+            "role": "super_admin",
+            "message": "Master Admin access granted"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@router.get("/surveillance/superadmin/all-feeds")
+async def superadmin_get_all_feeds(admin_token: str):
+    """Super Admin: Get ALL classroom feeds (unfiltered access)"""
+    try:
+        # Verify admin token
+        token_data = await db.stream_tokens.find_one({"token": admin_token, "user_role": "super_admin"}, {"_id": 0})
+        
+        if not token_data:
+            raise HTTPException(status_code=403, detail="Invalid or expired admin token")
+        
+        # Check token expiry
+        expires_at = datetime.fromisoformat(token_data["expires_at"]) if isinstance(token_data["expires_at"], str) else token_data["expires_at"]
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=403, detail="Token expired")
+        
+        # Get ALL classroom feeds
+        classrooms = await db.classroom_feeds.find({"is_active": True}, {"_id": 0}).to_list(500)
+        
+        await log_audit(
+            token_data["user_id"],
+            "super_admin",
+            "view_all_feeds",
+            details={"total_classrooms": len(classrooms)}
+        )
+        
+        return {
+            "total_classrooms": len(classrooms),
+            "classrooms": classrooms,
+            "access_level": "MASTER_ADMIN"
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch feeds: {str(e)}")
+
+@router.get("/surveillance/superadmin/audit-logs")
+async def superadmin_get_audit_logs(admin_token: str, limit: int = 100):
+    """Super Admin: View all audit logs"""
+    try:
+        # Verify admin token
+        token_data = await db.stream_tokens.find_one({"token": admin_token, "user_role": "super_admin"}, {"_id": 0})
+        
+        if not token_data:
+            raise HTTPException(status_code=403, detail="Invalid or expired admin token")
+        
+        # Get audit logs
+        logs = await db.audit_logs.find({}, {"_id": 0}).sort("timestamp", -1).limit(limit).to_list(limit)
+        
+        await log_audit(
+            token_data["user_id"],
+            "super_admin",
+            "view_audit_logs",
+            details={"logs_fetched": len(logs)}
+        )
+        
+        return {
+            "total_logs": len(logs),
+            "logs": logs
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
+
+# Stream Verification Endpoint
+@router.get("/surveillance/stream/{token}")
+async def verify_stream_access(token: str):
+    """Verify stream access token and return encrypted stream URL"""
+    try:
+        token_data = await db.stream_tokens.find_one({"token": token}, {"_id": 0})
+        
+        if not token_data:
+            raise HTTPException(status_code=403, detail="Invalid access token")
+        
+        # Check expiry
+        expires_at = datetime.fromisoformat(token_data["expires_at"]) if isinstance(token_data["expires_at"], str) else token_data["expires_at"]
+        if expires_at < datetime.now(timezone.utc):
+            raise HTTPException(status_code=403, detail="Access token expired")
+        
+        # Get classroom feed
+        if token_data["user_role"] == "super_admin":
+            # Super admin can access any classroom
+            return {
+                "access_valid": True,
+                "role": "super_admin",
+                "message": "Master admin access - unrestricted"
+            }
+        else:
+            # Parent access - get specific classroom
+            classroom = await db.classroom_feeds.find_one(
+                {"classroom_id": token_data["classroom_id"]},
+                {"_id": 0}
+            )
+            
+            if not classroom:
+                raise HTTPException(status_code=404, detail="Classroom not found")
+            
+            return {
+                "access_valid": True,
+                "role": "parent",
+                "classroom": {
+                    "classroom_id": classroom["classroom_id"],
+                    "class_level": classroom["class_level"],
+                    "section": classroom["section"]
+                },
+                "stream_url": classroom["stream_url"],  # Encrypted stream URL
+                "expires_at": token_data["expires_at"]
+            }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Stream verification failed: {str(e)}")
+
 
 
 @router.get("/competitive/attempts/student/{student_id}")
