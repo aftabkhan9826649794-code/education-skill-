@@ -163,6 +163,50 @@ class ClassroomFeed(BaseModel):
 
 class StreamAccessToken(BaseModel):
     token: str
+
+
+# Adaptive Learning System Models
+class StudentLearningProfile(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    learning_style: str  # "visual", "auditory", "kinesthetic", "reading_writing"
+    primary_interests: List[str]  # ["Technology", "Science", "Arts", "Sports"]
+    interest_scores: dict  # {"Technology": 85, "Science": 70, ...}
+    preferred_content_type: str  # "video", "interactive_quiz", "reading", "audio"
+    engagement_level: float  # 0-100
+    last_updated: datetime
+
+class StudentBehavior(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    action_type: str  # "view_video", "take_quiz", "rate_topic", "complete_lesson"
+    content_id: str
+    content_type: str  # "video", "quiz", "reading"
+    topic: str
+    time_spent_seconds: int
+    rating: Optional[int] = None  # 1-5 stars
+    performance_score: Optional[float] = None  # Quiz score
+    timestamp: datetime
+
+class PersonalizedRecommendation(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    student_id: str
+    recommendation_type: str  # "skill", "career_path", "content", "topic"
+    title: str
+    description: str
+    relevance_score: float  # 0-100
+    recommended_actions: List[str]
+    created_at: datetime
+
+class SARAPersonality(BaseModel):
+    student_id: str
+    teaching_style: str  # "visual_focused", "step_by_step", "exploratory", "practical"
+    explanation_complexity: str  # "simple", "moderate", "advanced"
+    interaction_tone: str  # "encouraging", "direct", "motivational"
+    use_analogies: bool
+    use_real_world_examples: bool
+    last_adapted: datetime
+
     user_id: str
     user_role: str  # "parent" or "super_admin"
     classroom_id: str

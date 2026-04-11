@@ -14,7 +14,8 @@ from models import (
     ResearchProject, ResearchProjectCreate,
     CompetitiveExamQuestion, CompetitiveExamAttempt, CompetitiveExamAttemptCreate,
     JobReadinessMetrics,
-    ParentUser, SuperAdmin, ClassroomFeed, StreamAccessToken, AuditLog
+    ParentUser, SuperAdmin, ClassroomFeed, StreamAccessToken, AuditLog,
+    StudentLearningProfile, StudentBehavior, PersonalizedRecommendation, SARAPersonality
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import os
