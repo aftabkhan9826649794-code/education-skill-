@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { Progress } from '../components/ui/progress';
+import AchievementFireworks from '../components/AchievementFireworks';
 
 const MasterSkillHub = () => {
   const navigate = useNavigate();
@@ -20,6 +21,8 @@ const MasterSkillHub = () => {
   const [quizResult, setQuizResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [badges, setBadges] = useState([]);
+  const [showFireworks, setShowFireworks] = useState(false);
+  const [lastAnswerCorrect, setLastAnswerCorrect] = useState(false);
 
   useEffect(() => {
     fetchSkillModules();
@@ -96,13 +99,26 @@ const MasterSkillHub = () => {
   };
 
   const submitAnswer = (answerIndex) => {
+    // Check if answer is correct
+    const currentQ = quizQuestions[currentQuestion];
+    const isCorrect = answerIndex === currentQ?.correct_answer;
+    
+    if (isCorrect) {
+      setLastAnswerCorrect(true);
+      setShowFireworks(true);
+    }
+    
     const newAnswers = [...answers, answerIndex];
     setAnswers(newAnswers);
     
     if (currentQuestion < quizQuestions.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
+      setTimeout(() => {
+        setCurrentQuestion(currentQuestion + 1);
+      }, isCorrect ? 2000 : 0);
     } else {
-      submitQuiz(newAnswers);
+      setTimeout(() => {
+        submitQuiz(newAnswers);
+      }, isCorrect ? 2000 : 0);
     }
   };
 
