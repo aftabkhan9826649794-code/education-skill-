@@ -6,6 +6,7 @@ import Classes from './pages/Classes';
 import Contact from './pages/Contact';
 import Dashboard from './pages/Dashboard';
 import ParentDashboard from './pages/ParentDashboard';
+import FinancialHub from './pages/FinancialHub';
 import VideoLessonCreator from './pages/VideoLessonCreator';
 import SecureExam from './pages/SecureExam';
 import MathLesson from './pages/MathLesson';
