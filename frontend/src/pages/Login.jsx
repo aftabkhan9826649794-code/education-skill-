@@ -4,10 +4,12 @@ import { useNavigate } from 'react-router-dom';
 const Login = () => {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [formData, setFormData] = useState({
-    studentId: '',
+    studentEmail: '',
     studentPass: '',
-    parentId: '',
+    parentEmail: '',
     parentPass: '',
     adminInstitution: '',
     adminEmail: '',
@@ -16,10 +18,61 @@ const Login = () => {
 
   const tabs = ['Student', 'Parents', 'Institution / Admin'];
 
-  const handleLogin = (role) => {
-    // Mock login - redirect to dashboard
-    console.log(`Login attempted as: ${role}`);
-    navigate('/dashboard');
+  const handleLogin = async (role) => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const API_URL = process.env.REACT_APP_BACKEND_URL;
+      let email = '';
+      let password = '';
+
+      if (role === 'Student') {
+        email = formData.studentEmail;
+        password = formData.studentPass;
+      } else if (role === 'Parent') {
+        email = formData.parentEmail;
+        password = formData.parentPass;
+      } else if (role === 'Admin') {
+        email = formData.adminEmail;
+        password = formData.adminPass;
+      }
+
+      if (!email || !password) {
+        setError('Please fill in all fields');
+        setLoading(false);
+        return;
+      }
+
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ email, password })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.detail || 'Login failed');
+      }
+
+      // Redirect based on role
+      if (data.user.role === 'parent') {
+        navigate('/parent-dashboard');
+      } else if (data.user.role === 'student') {
+        navigate('/dashboard');
+      } else if (data.user.role === 'admin') {
+        navigate('/admin-portal');
+      } else {
+        navigate('/');
+      }
+      
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -61,6 +114,16 @@ const Login = () => {
             ))}
           </div>
 
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 glass-strong border border-royal-red/50 rounded-xl p-4">
+              <p className="text-royal-red text-center">
+                <i className="fas fa-exclamation-circle mr-2"></i>
+                {error}
+              </p>
+            </div>
+          )}
+
           {/* Forms */}
           <div className="space-y-4">
             {/* Student Login */}
@@ -68,14 +131,15 @@ const Login = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-gold font-semibold mb-2 text-sm">
-                    Student ID / Email
+                    Email
                   </label>
                   <input
-                    type="text"
-                    placeholder="Enter Student ID or Email"
-                    value={formData.studentId}
-                    onChange={(e) => setFormData({...formData, studentId: e.target.value})}
-                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all"
+                    type="email"
+                    placeholder="student@test.com"
+                    value={formData.studentEmail}
+                    onChange={(e) => setFormData({...formData, studentEmail: e.target.value})}
+                    disabled={loading}
+                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -87,19 +151,31 @@ const Login = () => {
                     placeholder="Enter Password"
                     value={formData.studentPass}
                     onChange={(e) => setFormData({...formData, studentPass: e.target.value})}
-                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all"
+                    disabled={loading}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin('Student')}
+                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all disabled:opacity-50"
                   />
                 </div>
                 <button
                   onClick={() => handleLogin('Student')}
-                  className="w-full bg-gradient-royal py-4 rounded-xl text-white font-bold text-lg hover:glow-gold transition-all duration-300"
+                  disabled={loading}
+                  className="w-full bg-gradient-royal py-4 rounded-xl text-white font-bold text-lg hover:glow-gold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <i className="fas fa-sign-in-alt mr-2"></i>
-                  Login as Student
+                  {loading ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      Logging in...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-sign-in-alt mr-2"></i>
+                      Login as Student
+                    </>
+                  )}
                 </button>
-                <a href="#forgot" className="block text-center text-gold hover:text-white transition-colors text-sm">
-                  Forgot Password?
-                </a>
+                <p className="text-center text-gray-400 text-xs mt-2">
+                  Test: student@test.com / Student@123
+                </p>
               </div>
             )}
 
@@ -108,14 +184,15 @@ const Login = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-gold font-semibold mb-2 text-sm">
-                    Parent Email / Mobile
+                    Email
                   </label>
                   <input
-                    type="text"
-                    placeholder="Enter Email or Mobile Number"
-                    value={formData.parentId}
-                    onChange={(e) => setFormData({...formData, parentId: e.target.value})}
-                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all"
+                    type="email"
+                    placeholder="parent@test.com"
+                    value={formData.parentEmail}
+                    onChange={(e) => setFormData({...formData, parentEmail: e.target.value})}
+                    disabled={loading}
+                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all disabled:opacity-50"
                   />
                 </div>
                 <div>
@@ -127,19 +204,31 @@ const Login = () => {
                     placeholder="Enter Password"
                     value={formData.parentPass}
                     onChange={(e) => setFormData({...formData, parentPass: e.target.value})}
-                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all"
+                    disabled={loading}
+                    onKeyPress={(e) => e.key === 'Enter' && handleLogin('Parent')}
+                    className="w-full glass border border-gold/30 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-gold transition-all disabled:opacity-50"
                   />
                 </div>
                 <button
                   onClick={() => handleLogin('Parent')}
-                  className="w-full bg-gradient-royal py-4 rounded-xl text-white font-bold text-lg hover:glow-gold transition-all duration-300"
+                  disabled={loading}
+                  className="w-full bg-gradient-royal py-4 rounded-xl text-white font-bold text-lg hover:glow-gold transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <i className="fas fa-sign-in-alt mr-2"></i>
-                  Login as Parent
+                  {loading ? (
+                    <>
+                      <i className="fas fa-spinner fa-spin mr-2"></i>
+                      Logging in...
+                    </>
+                  ) : (
+                    <>
+                      <i className="fas fa-sign-in-alt mr-2"></i>
+                      Login as Parent
+                    </>
+                  )}
                 </button>
-                <a href="#forgot" className="block text-center text-gold hover:text-white transition-colors text-sm">
-                  Forgot Password?
-                </a>
+                <p className="text-center text-gray-400 text-xs mt-2">
+                  Test: parent@test.com / Parent@123
+                </p>
               </div>
             )}
 

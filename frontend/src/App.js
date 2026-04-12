@@ -5,6 +5,7 @@ import AITutor from './pages/AITutor';
 import Classes from './pages/Classes';
 import Contact from './pages/Contact';
 import Dashboard from './pages/Dashboard';
+import ParentDashboard from './pages/ParentDashboard';
 import VideoLessonCreator from './pages/VideoLessonCreator';
 import SecureExam from './pages/SecureExam';
 import MathLesson from './pages/MathLesson';

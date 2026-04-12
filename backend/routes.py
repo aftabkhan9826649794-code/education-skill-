@@ -1213,6 +1213,195 @@ async def update_job_readiness_metrics(student_id: str, exam_type: str, score: f
         print(f"Error updating job readiness metrics: {str(e)}")
 
 # =====================
+# PARENT DASHBOARD ROUTES
+# =====================
+
+@router.get("/parent/dashboard/{parent_id}")
+async def get_parent_dashboard(parent_id: str, req: Request):
+    """Get complete parent dashboard data"""
+    try:
+        # Verify authentication
+        current_user = await auth.get_current_user(req, db)
+        if current_user["role"] != "parent" and current_user["id"] != parent_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Get parent info
+        parent = await db.users.find_one({"id": parent_id, "role": "parent"}, {"_id": 0, "password_hash": 0})
+        if not parent:
+            raise HTTPException(status_code=404, detail="Parent not found")
+        
+        # Get linked students
+        linked_student_ids = parent.get("linked_students", [])
+        students = []
+        
+        if linked_student_ids:
+            students = await db.users.find(
+                {"id": {"$in": linked_student_ids}, "role": "student"},
+                {"_id": 0, "password_hash": 0}
+            ).to_list(100)
+        
+        # Get attendance for all students (last 30 days)
+        attendance_data = {}
+        for student in students:
+            records = await db.attendance.find(
+                {"student_id": student["id"]},
+                {"_id": 0}
+            ).sort("timestamp", -1).limit(30).to_list(30)
+            attendance_data[student["id"]] = records
+        
+        # Get progress reports
+        progress_data = {}
+        for student in students:
+            reports = await db.progress_reports.find(
+                {"student_id": student["id"]},
+                {"_id": 0}
+            ).sort("timestamp", -1).limit(10).to_list(10)
+            progress_data[student["id"]] = reports
+        
+        # Get notifications
+        notifications = await db.notifications.find(
+            {"parent_id": parent_id},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(20).to_list(20)
+        
+        # Get fee payments
+        fee_payments = []
+        for student in students:
+            payments = await db.fee_payments.find(
+                {"student_id": student["id"]},
+                {"_id": 0}
+            ).sort("payment_date", -1).limit(10).to_list(10)
+            fee_payments.extend(payments)
+        
+        # Get upcoming exams
+        upcoming_exams = await db.exam_schedules.find(
+            {"scheduled_date": {"$gte": datetime.now(timezone.utc)}},
+            {"_id": 0}
+        ).sort("scheduled_date", 1).limit(10).to_list(10)
+        
+        return {
+            "parent": parent,
+            "students": students,
+            "attendance": attendance_data,
+            "progress": progress_data,
+            "notifications": notifications,
+            "fee_payments": fee_payments,
+            "upcoming_exams": upcoming_exams
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch dashboard: {str(e)}")
+
+@router.post("/parent/link-student")
+async def link_student_to_parent(parent_id: str, student_id: str, req: Request):
+    """Link a student to parent account"""
+    try:
+        # Verify authentication
+        current_user = await auth.get_current_user(req, db)
+        if current_user["role"] != "parent" and current_user["id"] != parent_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Verify student exists
+        student = await db.users.find_one({"id": student_id, "role": "student"}, {"_id": 0})
+        if not student:
+            raise HTTPException(status_code=404, detail="Student not found")
+        
+        # Add student to parent's linked_students
+        await db.users.update_one(
+            {"id": parent_id},
+            {"$addToSet": {"linked_students": student_id}}
+        )
+        
+        # Update student's parent_id
+        await db.users.update_one(
+            {"id": student_id},
+            {"$set": {"parent_id": parent_id}}
+        )
+        
+        return {"message": "Student linked successfully", "student": student}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to link student: {str(e)}")
+
+@router.delete("/parent/unlink-student")
+async def unlink_student_from_parent(parent_id: str, student_id: str, req: Request):
+    """Unlink a student from parent account"""
+    try:
+        # Verify authentication
+        current_user = await auth.get_current_user(req, db)
+        if current_user["role"] != "parent" and current_user["id"] != parent_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Remove student from parent's linked_students
+        await db.users.update_one(
+            {"id": parent_id},
+            {"$pull": {"linked_students": student_id}}
+        )
+        
+        # Clear student's parent_id
+        await db.users.update_one(
+            {"id": student_id},
+            {"$set": {"parent_id": ""}}
+        )
+        
+        return {"message": "Student unlinked successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to unlink student: {str(e)}")
+
+@router.get("/parent/notifications/{parent_id}")
+async def get_parent_notifications(parent_id: str, req: Request, limit: int = 50):
+    """Get notifications for parent"""
+    try:
+        # Verify authentication
+        current_user = await auth.get_current_user(req, db)
+        if current_user["role"] != "parent" and current_user["id"] != parent_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        notifications = await db.notifications.find(
+            {"parent_id": parent_id},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(limit).to_list(limit)
+        
+        # Count unread
+        unread_count = await db.notifications.count_documents({
+            "parent_id": parent_id,
+            "read": False
+        })
+        
+        return {
+            "notifications": notifications,
+            "unread_count": unread_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch notifications: {str(e)}")
+
+@router.put("/parent/notification/{notification_id}/read")
+async def mark_notification_read(notification_id: str, req: Request):
+    """Mark notification as read"""
+    try:
+        await auth.get_current_user(req, db)
+        
+        await db.notifications.update_one(
+            {"id": notification_id},
+            {"$set": {"read": True}}
+        )
+        
+        return {"message": "Notification marked as read"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to update notification: {str(e)}")
+
+# =====================
 # EDUCATION BOARD SYSTEM
 # =====================
 
