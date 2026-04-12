@@ -1798,9 +1798,11 @@ async def get_skill_resources(skill_id: str):
         raise HTTPException(status_code=500, detail=f"Failed to fetch resources: {str(e)}")
 
 @router.post("/skills/generate-quiz")
-async def generate_skill_quiz(skill_id: str, num_questions: int = 10):
-    """Generate AI quiz for skill assessment"""
+async def generate_skill_quiz(skill_id: str, num_questions: int = 10, language: str = 'en'):
+    """Generate AI quiz for skill assessment in selected language"""
     try:
+        from translation_service import translate_ai_prompt, translate_dict
+        
         api_key = os.environ.get('EMERGENT_LLM_KEY')
         if not api_key:
             raise HTTPException(status_code=500, detail="LLM API key not configured")
@@ -1820,7 +1822,8 @@ async def generate_skill_quiz(skill_id: str, num_questions: int = 10):
             system_message=f"You are an expert quiz generator for {skill_name}. Generate challenging, practical questions that test real-world skills."
         ).with_model("openai", "gpt-5.2")
         
-        prompt = f"""Generate {num_questions} multiple-choice questions for {skill_name} skill assessment.
+        # Base prompt
+        base_prompt = f"""Generate {num_questions} multiple-choice questions for {skill_name} skill assessment.
 Topics to cover: {', '.join(topics)}
 
 Requirements:
@@ -1841,6 +1844,9 @@ Return ONLY valid JSON in this exact format:
   ]
 }}"""
         
+        # Add language instruction if not English
+        prompt = await translate_ai_prompt(base_prompt, language)
+        
         user_message = UserMessage(text=prompt)
         response = await chat.send_message(user_message)
         
@@ -1857,6 +1863,7 @@ Return ONLY valid JSON in this exact format:
             return {
                 "skill_id": skill_id,
                 "skill_name": skill_name,
+                "language": language,
                 "questions": quiz_data.get("questions", []),
                 "total_questions": len(quiz_data.get("questions", []))
             }
@@ -1935,6 +1942,109 @@ async def get_user_badges(user_id: str):
         return {"badges": badges, "total": len(badges)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch badges: {str(e)}")
+
+
+# Language-Aware AI Chat Endpoint
+@router.post("/ai/chat")
+async def ai_chat(message: str, language: str = 'en', context: str = None):
+    """
+    SARA AI chat that responds in selected language
+    Used for lessons, questions, explanations
+    """
+    try:
+        from translation_service import translate_ai_prompt, get_language_specific_voice_config
+        
+        api_key = os.environ.get('EMERGENT_LLM_KEY')
+        if not api_key:
+            raise HTTPException(status_code=500, detail="LLM API key not configured")
+        
+        # System message for SARA
+        system_msg = "You are SARA, an AI teacher at WINGS Global Edu-Skill Hub. You are helpful, patient, and explain concepts clearly."
+        
+        # Initialize chat
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"sara_chat_{datetime.now().timestamp()}",
+            system_message=system_msg
+        ).with_model("openai", "gpt-5.2")
+        
+        # Add language instruction to prompt
+        user_prompt = await translate_ai_prompt(message, language)
+        
+        # Add context if provided
+        if context:
+            user_prompt = f"Context: {context}\n\nQuestion: {user_prompt}"
+        
+        user_message = UserMessage(text=user_prompt)
+        response = await chat.send_message(user_message)
+        
+        # Get voice config for lip-sync
+        voice_config = get_language_specific_voice_config(language)
+        
+        return {
+            "response": response,
+            "language": language,
+            "voice_config": voice_config,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI chat failed: {str(e)}")
+
+# Translate Content Endpoint
+@router.post("/translate")
+async def translate_content(text: str, target_language: str):
+    """Translate any text to target language"""
+    try:
+        from translation_service import translate_text
+        
+        translated = await translate_text(text, target_language)
+        return {
+            "original": text,
+            "translated": translated,
+            "target_language": target_language
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Translation failed: {str(e)}")
+
+# Get Lesson in Language
+@router.get("/lessons/{lesson_id}")
+async def get_lesson_in_language(lesson_id: str, language: str = 'en'):
+    """Get lesson content translated to selected language"""
+    try:
+        from translation_service import translate_dict
+        
+        # Fetch lesson from database (mock for now)
+        lesson = {
+            "id": lesson_id,
+            "title": "Introduction to Python Programming",
+            "description": "Learn the basics of Python programming language",
+            "content": "Python is a high-level, interpreted programming language...",
+            "key_points": [
+                "Variables and data types",
+                "Control structures",
+                "Functions and modules"
+            ]
+        }
+        
+        # Translate lesson content
+        if language != 'en':
+            lesson = await translate_dict(
+                lesson,
+                ['title', 'description', 'content'],
+                language
+            )
+            
+            # Translate list items
+            from translation_service import translate_list
+            lesson['key_points'] = await translate_list(lesson['key_points'], language)
+        
+        return {
+            "lesson": lesson,
+            "language": language
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch lesson: {str(e)}")
 
 # =====================
 # AUTOMATED FINANCIAL RECEIPT SYSTEM
