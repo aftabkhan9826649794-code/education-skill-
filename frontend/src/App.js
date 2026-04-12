@@ -20,6 +20,7 @@ import CompetitiveExamTest from './pages/CompetitiveExamTest';
 import EducationHub from './pages/EducationHub';
 import EducationBoardSelector from './pages/EducationBoardSelector';
 import MasterSkillHub from './pages/MasterSkillHub';
+import OfficialAdminPortal from './pages/OfficialAdminPortal';
 import './App.css';
 
 function App() {
@@ -47,6 +48,7 @@ function App() {
         <Route path="/education-hub" element={<EducationHub />} />
         <Route path="/education-board-selector" element={<EducationBoardSelector />} />
         <Route path="/master-skill-hub" element={<MasterSkillHub />} />
+        <Route path="/admin-portal" element={<OfficialAdminPortal />} />
       </Routes>
     </BrowserRouter>
   );

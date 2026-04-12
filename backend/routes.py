@@ -2351,3 +2351,167 @@ async def get_messaging_logs(limit: int = 100):
         return {"logs": logs, "total": len(logs)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch logs: {str(e)}")
+
+
+# =====================
+# OFFICIAL ADMIN PORTAL
+# =====================
+
+from passlib.context import CryptContext
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+@router.post("/admin/official/login")
+async def official_admin_login(admin_id: str, password: str):
+    """Official Admin login (D.E.O., Board Secretary)"""
+    try:
+        admin = await db.official_admins.find_one({"admin_id": admin_id}, {"_id": 0})
+        
+        if not admin:
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        if not pwd_context.verify(password, admin.get("password_hash", "")):
+            raise HTTPException(status_code=401, detail="Invalid credentials")
+        
+        if not admin.get("is_active", False):
+            raise HTTPException(status_code=403, detail="Account is deactivated")
+        
+        await db.official_admins.update_one(
+            {"admin_id": admin_id},
+            {"$set": {"last_login": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        audit_log = {
+            "id": str(uuid4()),
+            "admin_id": admin_id,
+            "admin_name": admin.get("name", ""),
+            "admin_role": admin.get("designation", ""),
+            "action": "login",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        await db.admin_audit_logs.insert_one(audit_log)
+        
+        return {
+            "success": True,
+            "admin_id": admin_id,
+            "name": admin.get("name"),
+            "designation": admin.get("designation"),
+            "board_name": admin.get("board_name"),
+            "district": admin.get("district"),
+            "access_level": admin.get("access_level", "official")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@router.get("/admin/violations")
+async def get_violations(admin_id: str, status: str = "pending"):
+    """Get violation reports"""
+    try:
+        query = {"status": status} if status != "all" else {}
+        violations = await db.violation_reports.find(query, {"_id": 0}).sort("detected_at", -1).limit(100).to_list(100)
+        
+        await db.admin_audit_logs.insert_one({
+            "id": str(uuid4()),
+            "admin_id": admin_id,
+            "admin_name": admin_id,
+            "admin_role": "official_admin",
+            "action": "view_violations",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {"violations": violations, "total": len(violations)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch violations: {str(e)}")
+
+@router.get("/admin/live-feeds")
+async def get_live_feeds(admin_id: str):
+    """Get active exam hall feeds"""
+    try:
+        feeds = await db.classroom_feeds.find({}, {"_id": 0}).limit(50).to_list(50)
+        
+        await db.admin_audit_logs.insert_one({
+            "id": str(uuid4()),
+            "admin_id": admin_id,
+            "admin_name": admin_id,
+            "admin_role": "official_admin",
+            "action": "view_live_feeds",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        })
+        
+        return {"feeds": feeds, "total": len(feeds)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch feeds: {str(e)}")
+
+@router.get("/admin/analytics")
+async def get_regional_analytics(admin_id: str):
+    """Get regional analytics"""
+    try:
+        admin = await db.official_admins.find_one({"admin_id": admin_id}, {"_id": 0})
+        
+        analytics = {
+            "total_students": 5000,
+            "present_today": 4750,
+            "attendance_rate": 95.0,
+            "exams_conducted": 24,
+            "total_exams": 30,
+            "avg_score": 78.5,
+            "pass_rate": 89.2,
+            "board": admin.get("board_name") if admin else "Unknown",
+            "district": admin.get("district") if admin else "Unknown"
+        }
+        
+        return analytics
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch analytics: {str(e)}")
+
+@router.post("/admin/audit-log")
+async def create_audit_log(admin_id: str, action: str, resource_accessed: str = None):
+    """Create audit log"""
+    try:
+        admin = await db.official_admins.find_one({"admin_id": admin_id}, {"_id": 0})
+        
+        log = {
+            "id": str(uuid4()),
+            "admin_id": admin_id,
+            "admin_name": admin.get("name", "") if admin else "",
+            "admin_role": admin.get("designation", "") if admin else "",
+            "action": action,
+            "resource_accessed": resource_accessed,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.admin_audit_logs.insert_one(log)
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create log: {str(e)}")
+
+@router.post("/admin/official/create")
+async def create_official_admin(admin_id: str, name: str, email: str, phone: str, designation: str, board_name: str, password: str, district: str = None):
+    """Create official admin"""
+    try:
+        existing = await db.official_admins.find_one({"admin_id": admin_id}, {"_id": 0})
+        if existing:
+            raise HTTPException(status_code=400, detail="Admin ID exists")
+        
+        admin = {
+            "id": str(uuid4()),
+            "admin_id": admin_id,
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "designation": designation,
+            "board_name": board_name,
+            "district": district,
+            "access_level": "official",
+            "password_hash": pwd_context.hash(password),
+            "is_active": True,
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        
+        await db.official_admins.insert_one(admin)
+        return {"success": True, "admin_id": admin_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create admin: {str(e)}")
