@@ -21,11 +21,13 @@ import EducationHub from './pages/EducationHub';
 import EducationBoardSelector from './pages/EducationBoardSelector';
 import MasterSkillHub from './pages/MasterSkillHub';
 import OfficialAdminPortal from './pages/OfficialAdminPortal';
+import VoiceCommandController from './components/VoiceCommandController';
 import './App.css';
 
 function App() {
   return (
     <BrowserRouter>
+      <VoiceCommandController />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/exam-hub" element={<ExamHub />} />
