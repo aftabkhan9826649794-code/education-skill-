@@ -15,17 +15,17 @@ const Navbar = () => {
         {/* Desktop Navigation */}
         <div className="hidden lg:flex items-center gap-6">
           <a href="/" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">HOME</a>
-          <a href="#ai-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">AI HUB</a>
-          <a href="#study-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">STUDY HUB</a>
-          <a href="#skill-lab" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SKILL LAB</a>
+          <a href="/ai-tutor" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">AI HUB</a>
+          <a href="/learning-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">STUDY HUB</a>
+          <a href="/master-skill-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SKILL LAB</a>
           <a href="/exam-hub" className="text-sm font-bold text-gold hover:text-white transition-colors duration-300 border-b-2 border-gold glow-gold-hover">EXAM HUB</a>
-          <a href="#sign-language" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SIGN LANGUAGE HUB</a>
-          <a href="#about-ngo" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">ABOUT NGO</a>
+          <a href="/dashboard" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SIGN LANGUAGE HUB</a>
+          <a href="/competitive-exam-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">ABOUT NGO</a>
         </div>
         
         {/* Login Button */}
         <a 
-          href="#login" 
+          href="/login" 
           className="hidden lg:block glass px-6 py-2 rounded-full text-gold font-bold hover:glow-gold transition-all duration-300 border border-gold"
         >
           LOGIN
@@ -45,13 +45,13 @@ const Navbar = () => {
       {isMobileMenuOpen && (
         <div className="lg:hidden mt-4 glass-strong rounded-lg p-4 space-y-3 animate-slide-in">
           <a href="/" className="block text-sm font-semibold text-white hover:text-gold transition-colors">HOME</a>
-          <a href="#ai-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">AI HUB</a>
-          <a href="#study-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">STUDY HUB</a>
-          <a href="#skill-lab" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SKILL LAB</a>
+          <a href="/ai-tutor" className="block text-sm font-semibold text-white hover:text-gold transition-colors">AI HUB</a>
+          <a href="/learning-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">STUDY HUB</a>
+          <a href="/master-skill-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SKILL LAB</a>
           <a href="/exam-hub" className="block text-sm font-bold text-gold hover:text-white transition-colors">EXAM HUB ⭐</a>
-          <a href="#sign-language" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SIGN LANGUAGE HUB</a>
-          <a href="#about-ngo" className="block text-sm font-semibold text-white hover:text-gold transition-colors">ABOUT NGO</a>
-          <a href="#login" className="block text-sm font-bold text-gold hover:text-white transition-colors border-t border-gold/20 pt-3 mt-3">LOGIN</a>
+          <a href="/dashboard" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SIGN LANGUAGE HUB</a>
+          <a href="/competitive-exam-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">ABOUT NGO</a>
+          <a href="/login" className="block text-sm font-bold text-gold hover:text-white transition-colors border-t border-gold/20 pt-3 mt-3">LOGIN</a>
         </div>
       )}
     </nav>

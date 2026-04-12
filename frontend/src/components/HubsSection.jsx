@@ -14,7 +14,7 @@ const HubsSection = () => {
       description: 'Hands-on training in Robotics, AI & Coding',
       image: 'https://images.unsplash.com/photo-1655393001768-d946c97d6fd1?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NjZ8MHwxfHNlYXJjaHwxfHxyb2JvdGljc3xlbnwwfHx8fDE3NzU4NTM4ODF8MA&ixlib=rb-4.1.0&q=85',
       icon: 'fas fa-microchip',
-      link: '#skill-hub'
+      link: '/master-skill-hub'
     },
     {
       title: 'AI Counselor',
