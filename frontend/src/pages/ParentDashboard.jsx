@@ -114,14 +114,14 @@ const ParentDashboard = () => {
 
       <div className="relative z-10 container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+          <div className="text-center md:text-left">
             <h1 className="text-4xl font-black text-gradient mb-2">
               Parent Dashboard
             </h1>
             <p className="text-white/80">Welcome, {dashboardData?.parent?.name}!</p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-3">
             <button
               onClick={() => navigate('/')}
               className="glass px-6 py-3 rounded-xl text-gold font-bold border border-gold/30 hover:bg-gold/10 transition-all"

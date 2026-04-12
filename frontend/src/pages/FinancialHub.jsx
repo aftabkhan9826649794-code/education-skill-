@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const FinancialHub = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState('donation');
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState('');
@@ -165,24 +167,24 @@ const FinancialHub = () => {
 
       <div className="relative z-10 container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+          <div className="text-center md:text-left">
             <h1 className="text-4xl font-black text-gradient mb-2">
-              💰 Financial Hub
+              💰 {t('Financial Hub') || 'Financial Hub'}
             </h1>
-            <p className="text-white/80">Donations & Fee Payments with Automated Receipts</p>
+            <p className="text-white/80">{t('Donations & Fee Payments with Automated Receipts') || 'Donations & Fee Payments with Automated Receipts'}</p>
           </div>
           <button
             onClick={() => navigate('/')}
             className="glass px-6 py-3 rounded-xl text-gold font-bold border border-gold/30 hover:bg-gold/10 transition-all"
           >
             <i className="fas fa-home mr-2"></i>
-            Home
+            {t('Home') || 'Home'}
           </button>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex gap-4 mb-8">
+        <div className="flex flex-col sm:flex-row gap-4 mb-8">
           <button
             onClick={() => setActiveTab('donation')}
             className={`flex-1 py-4 px-6 rounded-xl font-bold text-lg transition-all duration-300 ${
@@ -192,7 +194,7 @@ const FinancialHub = () => {
             }`}
           >
             <i className="fas fa-hand-holding-heart mr-2"></i>
-            Make Donation
+            {t('Make Donation') || 'Make Donation'}
           </button>
           <button
             onClick={() => setActiveTab('fee')}
@@ -203,7 +205,7 @@ const FinancialHub = () => {
             }`}
           >
             <i className="fas fa-money-bill-wave mr-2"></i>
-            Pay Fee
+            {t('Pay Fee') || 'Pay Fee'}
           </button>
         </div>
 
