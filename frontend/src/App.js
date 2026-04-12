@@ -22,14 +22,18 @@ import EducationBoardSelector from './pages/EducationBoardSelector';
 import MasterSkillHub from './pages/MasterSkillHub';
 import OfficialAdminPortal from './pages/OfficialAdminPortal';
 import VoiceCommandController from './components/VoiceCommandController';
+import { LanguageProvider } from './contexts/LanguageContext';
+import LanguageSelector from './components/LanguageSelector';
 import './App.css';
 
 function App() {
   return (
-    <BrowserRouter>
-      <VoiceCommandController />
-      <Routes>
-        <Route path="/" element={<Home />} />
+    <LanguageProvider>
+      <BrowserRouter>
+        <VoiceCommandController />
+        <LanguageSelector />
+        <Routes>
+          <Route path="/" element={<Home />} />
         <Route path="/exam-hub" element={<ExamHub />} />
         <Route path="/ai-tutor" element={<AITutor />} />
         <Route path="/classes" element={<Classes />} />
@@ -53,6 +57,7 @@ function App() {
         <Route path="/admin-portal" element={<OfficialAdminPortal />} />
       </Routes>
     </BrowserRouter>
+    </LanguageProvider>
   );
 }
 
