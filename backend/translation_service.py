@@ -3,12 +3,12 @@ Dynamic Translation Service
 Translates AI responses, notes, and lessons to selected language
 """
 from fastapi import HTTPException
-from googletrans import Translator
+from deep_translator import GoogleTranslator
 import asyncio
 from functools import lru_cache
 
-# Initialize translator
-translator = Translator()
+# Initialize translator (deep_translator - no dependency conflicts)
+translator = GoogleTranslator
 
 # Language code mapping
 LANG_CODES = {
@@ -26,8 +26,9 @@ def translate_text_cached(text: str, target_lang: str) -> str:
         return text
     
     try:
-        result = translator.translate(text, dest=target_lang)
-        return result.text
+        # deep_translator usage: source='auto', target=lang_code
+        result = GoogleTranslator(source='auto', target=target_lang).translate(text)
+        return result
     except Exception as e:
         print(f"Translation error: {str(e)}")
         return text  # Return original if translation fails

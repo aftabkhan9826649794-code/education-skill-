@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response, Request
 from fastapi.responses import FileResponse
 from motor.motor_asyncio import AsyncIOMotorClient
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from uuid import uuid4
 import os
 from models import (
@@ -24,6 +24,9 @@ from models import (
 )
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 import json
+import auth
+from pydantic import BaseModel, EmailStr
+import secrets
 
 router = APIRouter()
 
@@ -33,6 +36,293 @@ db = None
 def set_db(database):
     global db
     db = database
+
+# =====================
+# AUTHENTICATION MODELS
+# =====================
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    role: str  # "student" or "parent"
+    phone: Optional[str] = None
+    class_name: Optional[str] = None  # For students
+    student_id_number: Optional[str] = None  # For students
+    linked_students: Optional[List[str]] = []  # For parents
+
+class LoginRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+# =====================
+# AUTHENTICATION ROUTES
+# =====================
+
+@router.post("/auth/register")
+async def register(request: RegisterRequest, response: Response):
+    """Register a new student or parent"""
+    try:
+        # Normalize email
+        email = request.email.lower()
+        
+        # Check if user already exists
+        existing = await db.users.find_one({"email": email}, {"_id": 0})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already registered")
+        
+        # Hash password
+        password_hash = auth.hash_password(request.password)
+        
+        # Create user document
+        user_id = str(uuid4())
+        user_doc = {
+            "id": user_id,
+            "email": email,
+            "name": request.name,
+            "role": request.role,
+            "password_hash": password_hash,
+            "created_at": datetime.now(timezone.utc)
+        }
+        
+        # Add role-specific fields
+        if request.role == "student":
+            user_doc["class_name"] = request.class_name or ""
+            user_doc["student_id_number"] = request.student_id_number or ""
+            user_doc["parent_id"] = ""
+        elif request.role == "parent":
+            user_doc["phone"] = request.phone or ""
+            user_doc["linked_students"] = request.linked_students
+        
+        # Insert into database
+        await db.users.insert_one(user_doc)
+        
+        # Create tokens
+        access_token = auth.create_access_token(user_id, email, request.role)
+        refresh_token = auth.create_refresh_token(user_id)
+        
+        # Set cookies
+        auth.set_auth_cookies(response, access_token, refresh_token)
+        
+        # Return user without password_hash
+        user_doc.pop("password_hash")
+        user_doc.pop("_id", None)
+        
+        return {
+            "message": "Registration successful",
+            "user": user_doc
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
+
+@router.post("/auth/login")
+async def login(request: LoginRequest, response: Response, req: Request):
+    """Login for students and parents"""
+    try:
+        # Normalize email
+        email = request.email.lower()
+        
+        # Check brute force
+        client_ip = req.client.host if req.client else "unknown"
+        identifier = f"{client_ip}:{email}"
+        
+        if await auth.check_brute_force(db, identifier):
+            raise HTTPException(
+                status_code=429,
+                detail="Too many failed attempts. Account locked for 15 minutes."
+            )
+        
+        # Find user
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+        if not user:
+            await auth.record_failed_login(db, identifier)
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Verify password
+        if not auth.verify_password(request.password, user["password_hash"]):
+            await auth.record_failed_login(db, identifier)
+            raise HTTPException(status_code=401, detail="Invalid email or password")
+        
+        # Clear failed attempts
+        await auth.clear_login_attempts(db, identifier)
+        
+        # Update last login
+        await db.users.update_one(
+            {"email": email},
+            {"$set": {"last_login": datetime.now(timezone.utc)}}
+        )
+        
+        # Create tokens
+        access_token = auth.create_access_token(user["id"], email, user["role"])
+        refresh_token = auth.create_refresh_token(user["id"])
+        
+        # Set cookies
+        auth.set_auth_cookies(response, access_token, refresh_token)
+        
+        # Return user without password_hash
+        user.pop("password_hash")
+        
+        return {
+            "message": "Login successful",
+            "user": user
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
+
+@router.post("/auth/logout")
+async def logout(response: Response, req: Request):
+    """Logout (clear cookies)"""
+    try:
+        # Verify user is authenticated (optional)
+        try:
+            await auth.get_current_user(req, db)
+        except:
+            pass  # Allow logout even if token is invalid
+        
+        # Clear cookies
+        auth.clear_auth_cookies(response)
+        
+        return {"message": "Logout successful"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Logout failed: {str(e)}")
+
+@router.get("/auth/me")
+async def get_current_user_route(req: Request):
+    """Get current authenticated user"""
+    try:
+        user = await auth.get_current_user(req, db)
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+@router.post("/auth/refresh")
+async def refresh_token(req: Request, response: Response):
+    """Refresh access token using refresh token"""
+    try:
+        refresh_token = req.cookies.get("refresh_token")
+        if not refresh_token:
+            raise HTTPException(status_code=401, detail="No refresh token")
+        
+        import jwt
+        payload = jwt.decode(refresh_token, auth.get_jwt_secret(), algorithms=[auth.JWT_ALGORITHM])
+        
+        if payload.get("type") != "refresh":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        
+        # Get user
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0})
+        if not user:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        # Create new access token
+        access_token = auth.create_access_token(user["id"], user["email"], user["role"])
+        
+        # Update cookie
+        response.set_cookie(
+            key="access_token",
+            value=access_token,
+            httponly=True,
+            secure=False,
+            samesite="lax",
+            max_age=900,
+            path="/"
+        )
+        
+        return {"message": "Token refreshed"}
+        
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Refresh token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Token refresh failed: {str(e)}")
+
+@router.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """Request password reset"""
+    try:
+        email = request.email.lower()
+        
+        # Check if user exists
+        user = await db.users.find_one({"email": email}, {"_id": 0})
+        if not user:
+            # Don't reveal if email exists
+            return {"message": "If email exists, reset link has been sent"}
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        
+        # Store token in database
+        await db.password_reset_tokens.insert_one({
+            "token": reset_token,
+            "email": email,
+            "expires_at": datetime.now(timezone.utc) + timezone.timedelta(hours=1),
+            "used": False,
+            "created_at": datetime.now(timezone.utc)
+        })
+        
+        # Log reset link (in production, send email)
+        reset_link = f"http://localhost:3000/reset-password?token={reset_token}"
+        print(f"\n🔑 PASSWORD RESET LINK: {reset_link}\n")
+        
+        return {"message": "If email exists, reset link has been sent"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to process request: {str(e)}")
+
+@router.post("/auth/reset-password")
+async def reset_password(request: ResetPasswordRequest):
+    """Reset password using token"""
+    try:
+        # Find token
+        token_doc = await db.password_reset_tokens.find_one(
+            {"token": request.token, "used": False},
+            {"_id": 0}
+        )
+        
+        if not token_doc:
+            raise HTTPException(status_code=400, detail="Invalid or expired token")
+        
+        # Check expiry
+        if datetime.now(timezone.utc) > token_doc["expires_at"]:
+            raise HTTPException(status_code=400, detail="Token expired")
+        
+        # Hash new password
+        new_hash = auth.hash_password(request.new_password)
+        
+        # Update user password
+        await db.users.update_one(
+            {"email": token_doc["email"]},
+            {"$set": {"password_hash": new_hash}}
+        )
+        
+        # Mark token as used
+        await db.password_reset_tokens.update_one(
+            {"token": request.token},
+            {"$set": {"used": True}}
+        )
+        
+        return {"message": "Password reset successful"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Password reset failed: {str(e)}")
 
 # =====================
 # ATTENDANCE ROUTES
