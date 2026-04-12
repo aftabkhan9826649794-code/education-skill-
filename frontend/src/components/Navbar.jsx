@@ -19,8 +19,8 @@ const Navbar = () => {
           <a href="/learning-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">STUDY HUB</a>
           <a href="/master-skill-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SKILL LAB</a>
           <a href="/exam-hub" className="text-sm font-bold text-gold hover:text-white transition-colors duration-300 border-b-2 border-gold glow-gold-hover">EXAM HUB</a>
-          <a href="/dashboard" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">SIGN LANGUAGE HUB</a>
-          <a href="/competitive-exam-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">ABOUT NGO</a>
+          <a href="/education-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">EDUCATION HUB</a>
+          <a href="/competitive-exam-hub" className="text-sm font-semibold text-white hover:text-gold transition-colors duration-300 border-b-2 border-transparent hover:border-gold">COMPETITIVE</a>
         </div>
         
         {/* Login Button */}
@@ -49,8 +49,8 @@ const Navbar = () => {
           <a href="/learning-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">STUDY HUB</a>
           <a href="/master-skill-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SKILL LAB</a>
           <a href="/exam-hub" className="block text-sm font-bold text-gold hover:text-white transition-colors">EXAM HUB ⭐</a>
-          <a href="/dashboard" className="block text-sm font-semibold text-white hover:text-gold transition-colors">SIGN LANGUAGE HUB</a>
-          <a href="/competitive-exam-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">ABOUT NGO</a>
+          <a href="/education-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">EDUCATION HUB</a>
+          <a href="/competitive-exam-hub" className="block text-sm font-semibold text-white hover:text-gold transition-colors">COMPETITIVE</a>
           <a href="/login" className="block text-sm font-bold text-gold hover:text-white transition-colors border-t border-gold/20 pt-3 mt-3">LOGIN</a>
         </div>
       )}

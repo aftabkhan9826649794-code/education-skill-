@@ -17,11 +17,11 @@ const HubsSection = () => {
       link: '/master-skill-hub'
     },
     {
-      title: 'AI Counselor',
-      description: 'Career guidance tailored to your unique strengths',
+      title: 'Education Hub',
+      description: 'CBSE, ICSE, IB, Cambridge - All boards available',
       image: 'https://customer-assets.emergentagent.com/job_ai-learning-hub-363/artifacts/m2jf0kgb_ai-councler.png',
-      icon: 'fas fa-user-tie',
-      link: '/dashboard'
+      icon: 'fas fa-graduation-cap',
+      link: '/education-hub'
     }
   ];
 
