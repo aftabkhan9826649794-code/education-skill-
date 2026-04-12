@@ -41,6 +41,8 @@ function App() {
         <Route path="/classes" element={<Classes />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/parent-dashboard" element={<ParentDashboard />} />
+        <Route path="/financial-hub" element={<FinancialHub />} />
         <Route path="/video-creator" element={<VideoLessonCreator />} />
         <Route path="/secure-exam" element={<SecureExam />} />
         <Route path="/math-lesson" element={<MathLesson />} />
