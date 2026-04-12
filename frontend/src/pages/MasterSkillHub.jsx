@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '../contexts/LanguageContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
@@ -8,6 +9,7 @@ import { Progress } from '../components/ui/progress';
 
 const MasterSkillHub = () => {
   const navigate = useNavigate();
+  const { t, currentLanguage } = useLanguage();
   const [skillModules, setSkillModules] = useState([]);
   const [selectedSkill, setSelectedSkill] = useState(null);
   const [resources, setResources] = useState([]);
@@ -72,7 +74,11 @@ const MasterSkillHub = () => {
       const response = await fetch(`${API_URL}/api/skills/generate-quiz`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ skill_id: skillId, num_questions: 10 })
+        body: JSON.stringify({ 
+          skill_id: skillId, 
+          num_questions: 10,
+          language: currentLanguage // Send current language to backend
+        })
       });
       
       const data = await response.json();
