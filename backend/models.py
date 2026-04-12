@@ -3,6 +3,55 @@ from typing import Optional, List
 from datetime import datetime
 import uuid
 
+# User & Admin Models
+class User(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    email: str
+    name: str
+    role: str  # "student", "parent", "teacher", "official_admin", "head_admin"
+    created_at: datetime
+
+class OfficialAdmin(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    admin_id: str  # Unique ID (e.g., DEO-001)
+    name: str
+    email: str
+    phone: str
+    designation: str  # "D.E.O.", "Board Secretary", "Inspector"
+    board_name: str  # "CBSE", "State Board", etc.
+    district: Optional[str] = None
+    state: Optional[str] = None
+    access_level: str = "official"  # "official" (limited), "head" (full)
+    password_hash: str
+    is_active: bool = True
+    created_at: datetime
+    last_login: Optional[datetime] = None
+
+class AdminAuditLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    admin_id: str
+    admin_name: str
+    admin_role: str
+    action: str  # "login", "view_feed", "view_violation", "download_report"
+    resource_accessed: Optional[str] = None
+    ip_address: Optional[str] = None
+    user_agent: Optional[str] = None
+    timestamp: datetime
+    details: Optional[dict] = None
+
+class ViolationReport(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    exam_id: str
+    student_id: str
+    student_name: str
+    violation_type: str  # "face_not_detected", "multiple_faces", "suspicious_object", "audio_detected"
+    severity: str  # "low", "medium", "high", "critical"
+    evidence_url: Optional[str] = None  # Screenshot/audio recording
+    detected_at: datetime
+    reviewed_by: Optional[str] = None
+    status: str = "pending"  # "pending", "reviewed", "dismissed", "action_taken"
+    notes: Optional[str] = None
+
 # Attendance Model
 class AttendanceRecord(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
