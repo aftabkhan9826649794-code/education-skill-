@@ -1,7 +1,6 @@
-"""
-Official Admin Portal - D.E.O. / Board Secretary Access
-Strict access isolation from Hidden Head Dashboard
-"""
+// Official Admin Portal - D.E.O. / Board Secretary Access
+// Strict access isolation from Hidden Head Dashboard
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -37,14 +36,17 @@ const OfficialAdminPortal = () => {
 
     try {
       const API_URL = process.env.REACT_APP_BACKEND_URL;
-      const response = await fetch(`${API_URL}/api/admin/official/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(loginForm)
-      });
+      const response = await fetch(
+        `${API_URL}/api/admin/official/login?admin_id=${encodeURIComponent(loginForm.admin_id)}&password=${encodeURIComponent(loginForm.password)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
 
       if (!response.ok) {
-        throw new Error('Invalid credentials');
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Invalid credentials');
       }
 
       const data = await response.json();
