@@ -318,31 +318,45 @@ export default function AirWritingApp() {
       }
       if (cancelled) return;
 
-      /* STEP 2: Camera (with 15s timeout to prevent infinite hang) */
+      /* STEP 2: Camera (with 8s timeout - faster fallback to mouse) */
       setStatus("starting_camera");
       let stream;
       try {
+        // Check permission first (instant check, no hang)
+        if (navigator.permissions && navigator.permissions.query) {
+          try {
+            const perm = await navigator.permissions.query({ name: "camera" });
+            if (perm.state === "denied") {
+              throw { name: "NotAllowedError", message: "Camera permission denied" };
+            }
+          } catch (permErr) {
+            if (permErr.name === "NotAllowedError") throw permErr;
+            // permissions.query not supported for camera in some browsers, continue
+          }
+        }
+
         const cameraPromise = navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, facingMode: "user", frameRate: { ideal: 30 } },
+          video: { width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, facingMode: "user" },
           audio: false,
         });
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("TIMEOUT")), 15000)
+          setTimeout(() => reject(new Error("TIMEOUT")), 8000)
         );
         stream = await Promise.race([cameraPromise, timeoutPromise]);
       } catch (err) {
         let msg;
         if (err.message === "TIMEOUT") {
-          msg = "Camera timed out. Close other tabs using camera, then reload. Mouse mode enabled.";
+          msg = "Camera busy or not responding. Close Gemini/other tabs using camera, then reload. Mouse mode active!";
         } else if (err.name === "NotAllowedError") {
-          msg = "Camera blocked. Click camera icon in address bar to allow, then reload. Mouse mode enabled.";
+          msg = "Camera blocked. Click lock icon in address bar → Camera → Allow, then reload.";
         } else if (err.name === "NotFoundError") {
-          msg = "No camera found. Mouse mode enabled - draw with your mouse!";
-        } else if (err.name === "NotReadableError") {
-          msg = "Camera in use by another app/tab. Close it and reload. Mouse mode enabled.";
+          msg = "No camera found. Draw with mouse instead!";
+        } else if (err.name === "NotReadableError" || err.name === "AbortError") {
+          msg = "Camera busy (another app/tab using it). Close other apps and reload.";
         } else {
-          msg = "Camera error: " + err.message + ". Mouse mode enabled.";
+          msg = "Camera issue: " + err.message + ". Mouse mode active!";
         }
+        console.warn("[AirWrite] Camera failed:", err.name || err.message);
         setErrorMsg(msg);
         setStatus("error");
         setDrawMode("mouse");
