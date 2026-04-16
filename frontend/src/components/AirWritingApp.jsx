@@ -26,7 +26,7 @@ const COLORS = [
   { hex: "#9370DB", name: "Lavender" }, { hex: "#FF8C00", name: "Amber" },
 ];
 
-export default function AirWritingApp() {
+export default function AirWritingApp({ onNewCreation }) {
   const videoRef = useRef(null);
   const trackRef = useRef(null);
   const drawRef = useRef(null);
@@ -511,6 +511,12 @@ export default function AirWritingApp() {
         </div>
         <div className="aw-header-right">
           {status === "ready" && <span className="aw-fps" data-testid="fps-counter">{fps} FPS</span>}
+          {/* New Creation button */}
+          {onNewCreation && (
+            <button className="aw-mode-btn active" onClick={onNewCreation} data-testid="new-creation-btn">
+              <Pen size={14} /> New Creation
+            </button>
+          )}
           {/* Mode toggle */}
           <button
             className={`aw-mode-btn ${drawMode === "mouse" ? "active" : ""}`}

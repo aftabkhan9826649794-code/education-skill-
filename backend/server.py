@@ -1,9 +1,10 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import base64
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List
@@ -32,6 +33,10 @@ class Drawing(BaseModel):
     title: str = ""
     image_data: str
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+class ColoringPrompt(BaseModel):
+    prompt: str
 
 
 @api_router.get("/")
@@ -66,6 +71,43 @@ async def delete_drawing(drawing_id: str):
     return {"message": "Drawing deleted"}
 
 
+@api_router.post("/generate-coloring")
+async def generate_coloring(input_data: ColoringPrompt):
+    """Generate a B&W coloring page from a text prompt using OpenAI."""
+    api_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="API key not configured")
+
+    enhanced_prompt = (
+        f"{input_data.prompt}, "
+        "high-contrast black and white outline, thick bold borders, "
+        "coloring book page style for children, no shading, no gradients, "
+        "clean pure white background, simple cartoon vector art, "
+        "large empty areas to fill with color"
+    )
+
+    try:
+        from emergentintegrations.llm.openai.image_generation import OpenAIImageGeneration
+        image_gen = OpenAIImageGeneration(api_key=api_key)
+        images = await image_gen.generate_images(
+            prompt=enhanced_prompt,
+            model="gpt-image-1",
+            number_of_images=1
+        )
+
+        if images and len(images) > 0:
+            image_base64 = base64.b64encode(images[0]).decode('utf-8')
+            return {
+                "image_base64": f"data:image/png;base64,{image_base64}",
+                "prompt_used": enhanced_prompt,
+            }
+        else:
+            raise HTTPException(status_code=500, detail="No image generated")
+    except Exception as e:
+        logger.error(f"Image generation failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Image generation failed: {str(e)}")
+
+
 app.include_router(api_router)
 
 app.add_middleware(
@@ -76,10 +118,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 

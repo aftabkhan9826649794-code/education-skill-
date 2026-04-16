@@ -1,15 +1,20 @@
+import { useState } from "react";
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import AirWritingApp from "@/components/AirWritingApp";
+import NewCreation from "@/components/NewCreation";
 
 function App() {
+  const [mode, setMode] = useState("airwrite"); // "airwrite" | "creation"
+
   return (
     <div className="App">
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<AirWritingApp />} />
-        </Routes>
-      </BrowserRouter>
+      {mode === "airwrite" && (
+        <AirWritingApp onNewCreation={() => setMode("creation")} />
+      )}
+      {mode === "creation" && (
+        <NewCreation onBack={() => setMode("airwrite")} />
+      )}
     </div>
   );
 }
