@@ -40,6 +40,12 @@ Build "Smart Air-Writing" with Gesture Control (Hybrid Mode) for a teacher who w
 - [x] Error handling for camera access denial
 - [x] BUG FIX: useEffect race condition - removed loading from deps, added initDoneRef guard
 - [x] Expanded color palette from 8 to 20 colors (Gold, White, Red, Green, Blue, Pink, Mint, Orange, Magenta, Cyan, Yellow, Hot Pink, Spring, Purple, Tomato, Turquoise, Rose, Lime, Lavender, Amber)
+- [x] BUG FIX: Replaced MediaPipe Camera utility with manual getUserMedia + requestAnimationFrame loop for reliable camera initialization
+- [x] BUG FIX: Increased pinch threshold from 30px to 55px for better real-world detection
+- [x] Lowered detection confidence from 0.7 to 0.5 for better hand detection
+- [x] Added image smoothing (imageSmoothingQuality: "high") for better video quality
+- [x] Added Photoshop-style color mixer: native HTML color picker input + color preview with hex code + recent colors (up to 5)
+- [x] Better gesture feedback: NO_HAND vs IDLE (Hand Detected - Ready) vs DRAWING vs CLEARING
 
 ## API Endpoints
 - GET /api/ - Health message
