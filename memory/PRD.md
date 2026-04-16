@@ -28,7 +28,7 @@ Build "Smart Air-Writing" with Gesture Control (Hybrid Mode) for a teacher who w
 - [x] Air-writing tracking Landmark 8 with smoothing
 - [x] Full palm gesture (all fingers extended) for 2s → clear canvas
 - [x] Mirrored webcam view with hand skeleton overlay
-- [x] Drawing canvas with color palette (8 colors)
+- [x] Drawing canvas with color palette (20 colors with tooltips - kid-friendly)
 - [x] Brush size slider (1-20px)
 - [x] Clear, Undo, Save, Download buttons (all LEFT-aligned)
 - [x] Deep Royal Purple (#301934) bg + Gold (#D4AF37) borders
@@ -38,6 +38,8 @@ Build "Smart Air-Writing" with Gesture Control (Hybrid Mode) for a teacher who w
 - [x] Download drawings as PNG
 - [x] Responsive layout
 - [x] Error handling for camera access denial
+- [x] BUG FIX: useEffect race condition - removed loading from deps, added initDoneRef guard
+- [x] Expanded color palette from 8 to 20 colors (Gold, White, Red, Green, Blue, Pink, Mint, Orange, Magenta, Cyan, Yellow, Hot Pink, Spring, Purple, Tomato, Turquoise, Rose, Lime, Lavender, Amber)
 
 ## API Endpoints
 - GET /api/ - Health message
