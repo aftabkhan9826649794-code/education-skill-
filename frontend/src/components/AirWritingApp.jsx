@@ -8,6 +8,11 @@ import axios from "axios";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const W = 1280;
 const H = 720;
+const TARGET_FPS = 18;
+const FRAME_INTERVAL = 1000 / TARGET_FPS;
+const PINCH_THRESHOLD = 0.03;
+const PALM_HOLD_MS = 1000;
+
 const COLORS = [
   { hex: "#D4AF37", name: "Gold" },
   { hex: "#FFFFFF", name: "White" },
@@ -36,9 +41,10 @@ export default function AirWritingApp() {
   const trackRef = useRef(null);
   const drawRef = useRef(null);
   const handsRef = useRef(null);
-  const camRef = useRef(null);
   const initDoneRef = useRef(false);
   const animFrameRef = useRef(null);
+  const streamRef = useRef(null);
+  const lastFrameRef = useRef(0);
 
   const pinchingRef = useRef(false);
   const lastPtRef = useRef(null);
@@ -57,6 +63,7 @@ export default function AirWritingApp() {
   const [drawings, setDrawings] = useState([]);
   const [gallery, setGallery] = useState(false);
   const [recentColors, setRecentColors] = useState([]);
+  const [fps, setFps] = useState(0);
 
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { sizeRef.current = size; }, [size]);
@@ -68,19 +75,23 @@ export default function AirWritingApp() {
     });
   }, []);
 
+  /* ---- Gesture Detection (Normalized Coordinates) ---- */
+  const checkPinch = useCallback((lm) => {
+    const dx = lm[4].x - lm[8].x;
+    const dy = lm[4].y - lm[8].y;
+    return Math.sqrt(dx * dx + dy * dy) < PINCH_THRESHOLD;
+  }, []);
+
   const checkPalm = useCallback((lm) => {
     const tips = [8, 12, 16, 20];
     const pips = [6, 10, 14, 18];
-    if (Math.abs(lm[4].x - lm[0].x) <= Math.abs(lm[3].x - lm[0].x)) return false;
+    const thumbDist = Math.abs(lm[4].x - lm[0].x);
+    const thumbIPDist = Math.abs(lm[3].x - lm[0].x);
+    if (thumbDist <= thumbIPDist) return false;
     return tips.every((t, i) => lm[t].y < lm[pips[i]].y);
   }, []);
 
-  const checkPinch = useCallback((lm, w, h) => {
-    const dx = (lm[4].x - lm[8].x) * w;
-    const dy = (lm[4].y - lm[8].y) * h;
-    return Math.sqrt(dx * dx + dy * dy) < 55;
-  }, []);
-
+  /* ---- Redraw all saved paths (for undo) ---- */
   const redraw = useCallback(() => {
     const c = drawRef.current;
     if (!c) return;
@@ -101,6 +112,7 @@ export default function AirWritingApp() {
     }
   }, []);
 
+  /* ---- onResults: ALL drawing logic lives here ---- */
   const onResults = useCallback((results) => {
     const tc = trackRef.current;
     const dc = drawRef.current;
@@ -108,10 +120,11 @@ export default function AirWritingApp() {
     const tctx = tc.getContext("2d");
     const dctx = dc.getContext("2d");
 
-    // Enable high quality image rendering
+    // High-quality video rendering
     tctx.imageSmoothingEnabled = true;
     tctx.imageSmoothingQuality = "high";
 
+    // Draw mirrored video feed
     tctx.save();
     tctx.clearRect(0, 0, W, H);
     tctx.translate(W, 0);
@@ -123,25 +136,33 @@ export default function AirWritingApp() {
       const raw = results.multiHandLandmarks[0];
       const lm = raw.map((p) => ({ ...p, x: 1 - p.x }));
 
-      window.drawConnectors(tctx, lm, window.HAND_CONNECTIONS, {
-        color: "#D4AF37",
-        lineWidth: 2,
-      });
-      window.drawLandmarks(tctx, lm, {
-        color: "#FFFFFF",
-        lineWidth: 1,
-        radius: 3,
-      });
+      // Draw hand skeleton using native Canvas API
+      const connections = window.HAND_CONNECTIONS;
+      tctx.strokeStyle = "#D4AF37";
+      tctx.lineWidth = 2;
+      for (const [a, b] of connections) {
+        tctx.beginPath();
+        tctx.moveTo(lm[a].x * W, lm[a].y * H);
+        tctx.lineTo(lm[b].x * W, lm[b].y * H);
+        tctx.stroke();
+      }
+      // Draw landmarks
+      for (const pt of lm) {
+        tctx.beginPath();
+        tctx.arc(pt.x * W, pt.y * H, 3, 0, Math.PI * 2);
+        tctx.fillStyle = "#FFFFFF";
+        tctx.fill();
+      }
 
-      const pinch = checkPinch(lm, W, H);
+      const pinch = checkPinch(lm);
       const palm = checkPalm(lm);
       const x = lm[8].x * W;
       const y = lm[8].y * H;
 
-      // Cursor
+      // Draw cursor at index fingertip
       tctx.beginPath();
       tctx.arc(x, y, pinch ? 10 : 5, 0, Math.PI * 2);
-      tctx.fillStyle = pinch ? "#D4AF37" : "rgba(255,255,255,0.6)";
+      tctx.fillStyle = pinch ? "#D4AF37" : "rgba(255,255,255,0.5)";
       tctx.fill();
       if (pinch) {
         tctx.beginPath();
@@ -151,6 +172,7 @@ export default function AirWritingApp() {
         tctx.stroke();
       }
 
+      /* ---- PINCH = DRAW using native Canvas beginPath/moveTo/lineTo ---- */
       if (pinch) {
         palmTimeRef.current = null;
         setClearProg(0);
@@ -159,9 +181,11 @@ export default function AirWritingApp() {
           lastPtRef.current = { x, y };
           curPathRef.current = [{ x, y }];
         } else {
-          const S = 0.45;
+          // Smoothing for jitter reduction
+          const S = 0.5;
           const sx = lastPtRef.current.x * (1 - S) + x * S;
           const sy = lastPtRef.current.y * (1 - S) + y * S;
+
           dctx.beginPath();
           dctx.strokeStyle = colorRef.current;
           dctx.lineWidth = sizeRef.current;
@@ -170,11 +194,13 @@ export default function AirWritingApp() {
           dctx.moveTo(lastPtRef.current.x, lastPtRef.current.y);
           dctx.lineTo(sx, sy);
           dctx.stroke();
+
           lastPtRef.current = { x: sx, y: sy };
           curPathRef.current.push({ x: sx, y: sy });
         }
         setGesture("DRAWING");
       } else {
+        // End stroke
         if (pinchingRef.current) {
           if (curPathRef.current.length > 1) {
             pathsRef.current.push({
@@ -187,18 +213,20 @@ export default function AirWritingApp() {
           pinchingRef.current = false;
           lastPtRef.current = null;
         }
+
+        /* ---- FULL PALM > 1s = CLEAR ---- */
         if (palm) {
           if (!palmTimeRef.current) palmTimeRef.current = Date.now();
           const elapsed = Date.now() - palmTimeRef.current;
-          setClearProg(Math.min(elapsed / 2000, 1));
+          setClearProg(Math.min(elapsed / PALM_HOLD_MS, 1));
           setGesture("CLEARING");
-          if (elapsed >= 2000) {
+          if (elapsed >= PALM_HOLD_MS) {
             dctx.clearRect(0, 0, W, H);
             pathsRef.current = [];
             palmTimeRef.current = null;
             setClearProg(0);
             setGesture("CLEARED");
-            setTimeout(() => setGesture("IDLE"), 1200);
+            setTimeout(() => setGesture("IDLE"), 800);
           }
         } else {
           palmTimeRef.current = null;
@@ -207,6 +235,7 @@ export default function AirWritingApp() {
         }
       }
     } else {
+      // No hand visible
       if (pinchingRef.current) {
         if (curPathRef.current.length > 1) {
           pathsRef.current.push({
@@ -225,24 +254,24 @@ export default function AirWritingApp() {
     }
   }, [checkPinch, checkPalm]);
 
+  /* ---- Initialize: getUserMedia + MediaPipe + FPS-gated RAF loop ---- */
   useEffect(() => {
     let cancelled = false;
     if (initDoneRef.current) return;
 
     const startAll = async () => {
-      // Wait for MediaPipe scripts to load
+      // Wait for MediaPipe CDN scripts
       while (
-        !(window.Hands && window.drawConnectors && window.drawLandmarks && window.HAND_CONNECTIONS)
+        !(window.Hands && window.drawConnectors && window.HAND_CONNECTIONS)
       ) {
         if (cancelled) return;
         await new Promise((r) => setTimeout(r, 200));
       }
-
       if (initDoneRef.current || cancelled) return;
       initDoneRef.current = true;
 
       try {
-        // Initialize MediaPipe Hands
+        // Single MediaPipe instance - maxNumHands: 1
         const hands = new window.Hands({
           locateFile: (f) =>
             `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
@@ -256,7 +285,7 @@ export default function AirWritingApp() {
         hands.onResults(onResults);
         handsRef.current = hands;
 
-        // Get camera stream manually for better quality control
+        // HD Camera feed: 1280x720
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             width: { ideal: 1280, min: 640 },
@@ -266,22 +295,20 @@ export default function AirWritingApp() {
           },
           audio: false,
         });
-
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
+        streamRef.current = stream;
 
         const video = videoRef.current;
         video.srcObject = stream;
         video.width = W;
         video.height = H;
-
         await new Promise((resolve) => {
           video.onloadedmetadata = resolve;
         });
         await video.play();
-
         if (cancelled) {
           stream.getTracks().forEach((t) => t.stop());
           return;
@@ -290,12 +317,32 @@ export default function AirWritingApp() {
         setLoading(false);
         setError(null);
 
-        // Detection loop using requestAnimationFrame
+        // FPS-gated detection loop (15-20 FPS)
         let processing = false;
+        let fpsCount = 0;
+        let fpsTimer = performance.now();
+
         const detect = async () => {
           if (cancelled) return;
-          if (!processing && video.readyState >= 2 && handsRef.current) {
+          const now = performance.now();
+
+          // FPS counter
+          fpsCount++;
+          if (now - fpsTimer >= 1000) {
+            setFps(fpsCount);
+            fpsCount = 0;
+            fpsTimer = now;
+          }
+
+          // Only process at TARGET_FPS
+          if (
+            !processing &&
+            now - lastFrameRef.current >= FRAME_INTERVAL &&
+            video.readyState >= 2 &&
+            handsRef.current
+          ) {
             processing = true;
+            lastFrameRef.current = now;
             try {
               await handsRef.current.send({ image: video });
             } catch (e) {
@@ -308,15 +355,17 @@ export default function AirWritingApp() {
           }
         };
         detect();
-        camRef.current = stream;
       } catch (err) {
         if (!cancelled) {
-          if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
-            setError("Camera access denied. Please allow camera permission and reload the page.");
+          if (
+            err.name === "NotAllowedError" ||
+            err.name === "PermissionDeniedError"
+          ) {
+            setError("Camera access denied. Please allow camera and reload.");
           } else if (err.name === "NotFoundError") {
             setError("No camera found. Please connect a camera and reload.");
           } else {
-            setError("Failed to start camera: " + err.message);
+            setError("Camera failed: " + err.message);
           }
           setLoading(false);
         }
@@ -327,9 +376,7 @@ export default function AirWritingApp() {
 
     const timeout = setTimeout(() => {
       if (!initDoneRef.current) {
-        setError(
-          "MediaPipe scripts taking too long. Please check your connection and reload."
-        );
+        setError("MediaPipe loading too slow. Check connection and reload.");
         setLoading(false);
       }
     }, 30000);
@@ -338,12 +385,13 @@ export default function AirWritingApp() {
       cancelled = true;
       clearTimeout(timeout);
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      if (camRef.current && camRef.current.getTracks) {
-        camRef.current.getTracks().forEach((t) => t.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
       }
     };
   }, [onResults]);
 
+  /* ---- Handlers ---- */
   const handleClear = () => {
     const c = drawRef.current;
     if (c) c.getContext("2d").clearRect(0, 0, c.width, c.height);
@@ -410,6 +458,7 @@ export default function AirWritingApp() {
     }
   };
 
+  /* ---- RENDER ---- */
   return (
     <div className="aw-app" data-testid="air-writing-app">
       <header className="aw-header" data-testid="app-header">
@@ -417,10 +466,16 @@ export default function AirWritingApp() {
           <Hand size={28} strokeWidth={1.5} />
           <h1>AirWrite</h1>
         </div>
-        <p className="aw-tagline">Smart Air-Writing Tool for Teachers</p>
+        <div className="aw-header-right">
+          <span className="aw-fps" data-testid="fps-counter">
+            {fps} FPS
+          </span>
+          <p className="aw-tagline">Smart Air-Writing for Teachers</p>
+        </div>
       </header>
 
       <div className="aw-main">
+        {/* ---- LEFT SIDEBAR: flex-direction column, align-items flex-start ---- */}
         <aside className="aw-sidebar" data-testid="control-panel">
           <div className="aw-ctrl-group">
             <label className="aw-label">Brush Color</label>
@@ -432,11 +487,11 @@ export default function AirWritingApp() {
                   style={{ background: c.hex }}
                   onClick={() => setColor(c.hex)}
                   data-testid={`color-btn-${c.hex.replace("#", "")}`}
-                  aria-label={`Select ${c.name}`}
                   title={c.name}
                 />
               ))}
             </div>
+            {/* Photoshop-style Color Mixer */}
             <div className="aw-color-mixer" data-testid="color-mixer">
               <div className="aw-mixer-row">
                 <label className="aw-mixer-label">
@@ -497,15 +552,12 @@ export default function AirWritingApp() {
             <div className="aw-size-preview">
               <span
                 className="aw-dot"
-                style={{
-                  width: size + 4,
-                  height: size + 4,
-                  background: color,
-                }}
+                style={{ width: size + 4, height: size + 4, background: color }}
               />
             </div>
           </div>
 
+          {/* Buttons: width 100%, text-align left, STRICTLY LEFT ALIGNED */}
           <div className="aw-ctrl-group aw-buttons">
             <button
               onClick={handleClear}
@@ -525,7 +577,7 @@ export default function AirWritingApp() {
             </button>
             <button
               onClick={handleSave}
-              className="aw-btn aw-btn-accent"
+              className="aw-btn"
               data-testid="save-btn"
             >
               <Save size={16} />
@@ -554,12 +606,13 @@ export default function AirWritingApp() {
               <Hand size={18} />
               <div>
                 <strong>Open Palm</strong>
-                <span>Hold 2s to clear canvas</span>
+                <span>Hold 1s to clear canvas</span>
               </div>
             </div>
           </div>
         </aside>
 
+        {/* ---- CANVAS AREA ---- */}
         <div className="aw-canvas-area">
           <div className="aw-canvas-wrap" data-testid="canvas-wrapper">
             <video ref={videoRef} style={{ display: "none" }} playsInline />
@@ -604,10 +657,10 @@ export default function AirWritingApp() {
               {gesture === "IDLE" && (
                 <>
                   <Hand size={14} />
-                  <span>Hand Detected - Ready</span>
+                  <span>Hand Detected</span>
                 </>
               )}
-              {gesture === "NO_HAND" && <span>Show your hand to start</span>}
+              {gesture === "NO_HAND" && <span>Show your hand</span>}
             </div>
 
             {loading && (
@@ -626,7 +679,8 @@ export default function AirWritingApp() {
                 <p>{error}</p>
                 <button
                   onClick={() => window.location.reload()}
-                  className="aw-btn aw-btn-accent"
+                  className="aw-btn"
+                  data-testid="reload-btn"
                 >
                   Reload Page
                 </button>
@@ -636,6 +690,7 @@ export default function AirWritingApp() {
         </div>
       </div>
 
+      {/* ---- GALLERY ---- */}
       <div className="aw-gallery-bar" data-testid="gallery-section">
         <button
           onClick={() => setGallery(!gallery)}
