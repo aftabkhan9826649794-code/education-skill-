@@ -9,8 +9,26 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const W = 1280;
 const H = 720;
 const COLORS = [
-  "#D4AF37", "#FFFFFF", "#FF4757", "#2ED573",
-  "#1E90FF", "#FF6B81", "#7BED9F", "#FFA502"
+  { hex: "#D4AF37", name: "Gold" },
+  { hex: "#FFFFFF", name: "White" },
+  { hex: "#FF4757", name: "Red" },
+  { hex: "#2ED573", name: "Green" },
+  { hex: "#1E90FF", name: "Blue" },
+  { hex: "#FF6B81", name: "Pink" },
+  { hex: "#7BED9F", name: "Mint" },
+  { hex: "#FFA502", name: "Orange" },
+  { hex: "#FF00FF", name: "Magenta" },
+  { hex: "#00FFFF", name: "Cyan" },
+  { hex: "#FFD700", name: "Yellow" },
+  { hex: "#FF1493", name: "Hot Pink" },
+  { hex: "#00FF7F", name: "Spring" },
+  { hex: "#8B5CF6", name: "Purple" },
+  { hex: "#FF6347", name: "Tomato" },
+  { hex: "#40E0D0", name: "Turquoise" },
+  { hex: "#FF69B4", name: "Rose" },
+  { hex: "#ADFF2F", name: "Lime" },
+  { hex: "#9370DB", name: "Lavender" },
+  { hex: "#FF8C00", name: "Amber" },
 ];
 
 export default function AirWritingApp() {
@@ -19,6 +37,7 @@ export default function AirWritingApp() {
   const drawRef = useRef(null);
   const handsRef = useRef(null);
   const camRef = useRef(null);
+  const initDoneRef = useRef(false);
 
   const pinchingRef = useRef(false);
   const lastPtRef = useRef(null);
@@ -195,6 +214,8 @@ export default function AirWritingApp() {
 
   useEffect(() => {
     let cancelled = false;
+    if (initDoneRef.current) return;
+
     const poll = setInterval(() => {
       if (cancelled) {
         clearInterval(poll);
@@ -208,6 +229,9 @@ export default function AirWritingApp() {
         window.HAND_CONNECTIONS
       ) {
         clearInterval(poll);
+        if (initDoneRef.current) return;
+        initDoneRef.current = true;
+
         try {
           const hands = new window.Hands({
             locateFile: (f) =>
@@ -234,25 +258,29 @@ export default function AirWritingApp() {
           cam
             .start()
             .then(() => {
-              if (!cancelled) setLoading(false);
+              if (!cancelled) {
+                setLoading(false);
+                setError(null);
+              }
             })
-            .catch((err) => {
-              if (!cancelled)
+            .catch(() => {
+              if (!cancelled) {
                 setError(
                   "Camera access denied. Please allow camera permission and reload."
                 );
-              setLoading(false);
+                setLoading(false);
+              }
             });
           camRef.current = cam;
         } catch (err) {
-          setError("Failed to initialize hand tracking. Please reload.");
+          setError("Failed to initialize hand tracking: " + err.message);
           setLoading(false);
         }
       }
     }, 200);
 
     const timeout = setTimeout(() => {
-      if (loading) {
+      if (!initDoneRef.current) {
         setError("MediaPipe scripts taking too long. Please check your connection and reload.");
         setLoading(false);
       }
@@ -262,9 +290,8 @@ export default function AirWritingApp() {
       cancelled = true;
       clearInterval(poll);
       clearTimeout(timeout);
-      if (camRef.current) camRef.current.stop();
     };
-  }, [onResults, loading]);
+  }, [onResults]);
 
   const handleClear = () => {
     const c = drawRef.current;
@@ -349,12 +376,13 @@ export default function AirWritingApp() {
             <div className="aw-palette">
               {COLORS.map((c) => (
                 <button
-                  key={c}
-                  className={`aw-swatch${color === c ? " active" : ""}`}
-                  style={{ background: c }}
-                  onClick={() => setColor(c)}
-                  data-testid={`color-btn-${c.replace("#", "")}`}
-                  aria-label={`Select color ${c}`}
+                  key={c.hex}
+                  className={`aw-swatch${color === c.hex ? " active" : ""}`}
+                  style={{ background: c.hex }}
+                  onClick={() => setColor(c.hex)}
+                  data-testid={`color-btn-${c.hex.replace("#", "")}`}
+                  aria-label={`Select ${c.name}`}
+                  title={c.name}
                 />
               ))}
             </div>

@@ -113,20 +113,21 @@
 
 /* Color Palette */
 .aw-palette {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
-  justify-content: flex-start;
+  width: 100%;
 }
 
 .aw-swatch {
-  width: 28px;
-  height: 28px;
+  width: 100%;
+  aspect-ratio: 1;
   border-radius: 50%;
   border: 2px solid transparent;
   cursor: pointer;
   transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
   outline: none;
+  max-width: 32px;
 }
 
 .aw-swatch:hover {
