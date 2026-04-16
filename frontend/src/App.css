@@ -85,6 +85,29 @@
   font-weight: 500;
 }
 
+/* Mode toggle button */
+.aw-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--gold);
+  background: transparent;
+  color: var(--gold);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  transition: all 0.15s;
+}
+
+.aw-mode-btn:hover { background: var(--gold-muted); }
+.aw-mode-btn.active {
+  background: var(--gold);
+  color: var(--purple-dark);
+}
+
 /* ===== MAIN LAYOUT ===== */
 .aw-main {
   display: flex;
@@ -397,7 +420,60 @@
 }
 
 .aw-track-canvas { z-index: 1; }
-.aw-draw-canvas { z-index: 2; pointer-events: none; }
+.aw-draw-canvas { z-index: 2; }
+
+/* Debug info overlay */
+.aw-debug {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  z-index: 5;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: var(--gold);
+  font-size: 11px;
+  font-family: monospace;
+  backdrop-filter: blur(4px);
+}
+
+/* Mouse mode hint */
+.aw-mouse-hint {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(139, 0, 0, 0.8);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 600;
+  backdrop-filter: blur(4px);
+  border: 1px solid var(--gold);
+}
+
+/* Error banner (non-blocking - allows mouse drawing underneath) */
+.aw-error-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(139, 0, 0, 0.9);
+  color: var(--white);
+  font-size: 12px;
+  backdrop-filter: blur(6px);
+}
+
+.aw-error-banner svg { color: var(--gold); flex-shrink: 0; }
 
 /* ===== GESTURE STATUS BADGE ===== */
 .aw-gesture-badge {

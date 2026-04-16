@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import {
   Pen, Trash2, Save, Undo2, Download, Hand, ChevronDown,
-  ChevronUp, Loader2, AlertCircle, PenLine, Pipette, Video
+  ChevronUp, Loader2, AlertCircle, PenLine, Pipette, Video, Mouse
 } from "lucide-react";
 import axios from "axios";
 
@@ -14,26 +14,16 @@ const PINCH_THRESHOLD = 0.03;
 const PALM_HOLD_MS = 1000;
 
 const COLORS = [
-  { hex: "#D4AF37", name: "Gold" },
-  { hex: "#FFFFFF", name: "White" },
-  { hex: "#FF4757", name: "Red" },
-  { hex: "#2ED573", name: "Green" },
-  { hex: "#1E90FF", name: "Blue" },
-  { hex: "#FF6B81", name: "Pink" },
-  { hex: "#7BED9F", name: "Mint" },
-  { hex: "#FFA502", name: "Orange" },
-  { hex: "#FF00FF", name: "Magenta" },
-  { hex: "#00FFFF", name: "Cyan" },
-  { hex: "#FFD700", name: "Yellow" },
-  { hex: "#FF1493", name: "Hot Pink" },
-  { hex: "#00FF7F", name: "Spring" },
-  { hex: "#8B5CF6", name: "Purple" },
-  { hex: "#FF6347", name: "Tomato" },
-  { hex: "#40E0D0", name: "Turquoise" },
-  { hex: "#FF69B4", name: "Rose" },
-  { hex: "#ADFF2F", name: "Lime" },
-  { hex: "#9370DB", name: "Lavender" },
-  { hex: "#FF8C00", name: "Amber" },
+  { hex: "#D4AF37", name: "Gold" }, { hex: "#FFFFFF", name: "White" },
+  { hex: "#FF4757", name: "Red" }, { hex: "#2ED573", name: "Green" },
+  { hex: "#1E90FF", name: "Blue" }, { hex: "#FF6B81", name: "Pink" },
+  { hex: "#7BED9F", name: "Mint" }, { hex: "#FFA502", name: "Orange" },
+  { hex: "#FF00FF", name: "Magenta" }, { hex: "#00FFFF", name: "Cyan" },
+  { hex: "#FFD700", name: "Yellow" }, { hex: "#FF1493", name: "Hot Pink" },
+  { hex: "#00FF7F", name: "Spring" }, { hex: "#8B5CF6", name: "Purple" },
+  { hex: "#FF6347", name: "Tomato" }, { hex: "#40E0D0", name: "Turquoise" },
+  { hex: "#FF69B4", name: "Rose" }, { hex: "#ADFF2F", name: "Lime" },
+  { hex: "#9370DB", name: "Lavender" }, { hex: "#FF8C00", name: "Amber" },
 ];
 
 export default function AirWritingApp() {
@@ -45,6 +35,7 @@ export default function AirWritingApp() {
   const streamRef = useRef(null);
   const lastFrameRef = useRef(0);
   const initRef = useRef(false);
+  const errorCountRef = useRef(0);
 
   const pinchingRef = useRef(false);
   const lastPtRef = useRef(null);
@@ -53,6 +44,10 @@ export default function AirWritingApp() {
   const curPathRef = useRef([]);
   const colorRef = useRef("#D4AF37");
   const sizeRef = useRef(4);
+
+  // Mouse/touch drawing refs
+  const mouseDrawingRef = useRef(false);
+  const mouseLastPtRef = useRef(null);
 
   const [gesture, setGesture] = useState("NO_HAND");
   const [color, setColor] = useState("#D4AF37");
@@ -65,6 +60,8 @@ export default function AirWritingApp() {
   const [recentColors, setRecentColors] = useState([]);
   const [fps, setFps] = useState(0);
   const [cameraReady, setCameraReady] = useState(false);
+  const [drawMode, setDrawMode] = useState("gesture"); // "gesture" or "mouse"
+  const [debugInfo, setDebugInfo] = useState("");
 
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { sizeRef.current = size; }, [size]);
@@ -73,7 +70,7 @@ export default function AirWritingApp() {
     setRecentColors((prev) => [hex, ...prev.filter((c) => c !== hex)].slice(0, 5));
   }, []);
 
-  /* ---- FUNCTION 1: PINCH TO DRAW (normalized dist < 0.03) ---- */
+  /* ---- FUNCTION 1: PINCH TO DRAW ---- */
   const checkPinch = useCallback((lm) => {
     const dx = lm[4].x - lm[8].x;
     const dy = lm[4].y - lm[8].y;
@@ -108,7 +105,7 @@ export default function AirWritingApp() {
     }
   }, []);
 
-  /* ---- onResults: ALL drawing inside this callback ---- */
+  /* ---- onResults: gesture drawing logic ---- */
   const onResults = useCallback((results) => {
     const tc = trackRef.current;
     const dc = drawRef.current;
@@ -116,13 +113,12 @@ export default function AirWritingApp() {
     const tctx = tc.getContext("2d");
     const dctx = dc.getContext("2d");
 
-    // Clear tracking overlay (transparent - video shows through from <video> element)
     tctx.clearRect(0, 0, W, H);
 
     if (results.multiHandLandmarks && results.multiHandLandmarks[0]) {
       const lm = results.multiHandLandmarks[0];
 
-      // Draw hand skeleton - native Canvas API: beginPath, moveTo, lineTo
+      // Draw hand skeleton natively
       const conns = window.HAND_CONNECTIONS;
       if (conns) {
         tctx.strokeStyle = "#D4AF37";
@@ -134,7 +130,6 @@ export default function AirWritingApp() {
           tctx.stroke();
         }
       }
-      // Draw joint dots
       for (const pt of lm) {
         tctx.beginPath();
         tctx.arc(pt.x * W, pt.y * H, 3, 0, Math.PI * 2);
@@ -147,7 +142,13 @@ export default function AirWritingApp() {
       const x = lm[8].x * W;
       const y = lm[8].y * H;
 
-      // Cursor at index fingertip (Landmark 8)
+      // Debug info
+      const dist = Math.sqrt(
+        Math.pow(lm[4].x - lm[8].x, 2) + Math.pow(lm[4].y - lm[8].y, 2)
+      ).toFixed(4);
+      setDebugInfo(`Pinch: ${dist} ${pinch ? "YES" : "no"} | Palm: ${palm ? "YES" : "no"}`);
+
+      // Cursor
       tctx.beginPath();
       tctx.arc(x, y, pinch ? 10 : 5, 0, Math.PI * 2);
       tctx.fillStyle = pinch ? "#D4AF37" : "rgba(255,255,255,0.5)";
@@ -160,7 +161,6 @@ export default function AirWritingApp() {
         tctx.stroke();
       }
 
-      /* ===== FUNCTION 1: PINCH = DRAW ===== */
       if (pinch) {
         palmTimeRef.current = null;
         setClearProg(0);
@@ -197,7 +197,6 @@ export default function AirWritingApp() {
           pinchingRef.current = false;
           lastPtRef.current = null;
         }
-        /* ===== FUNCTION 2: FULL PALM > 1s = CLEAR ===== */
         if (palm) {
           if (!palmTimeRef.current) palmTimeRef.current = Date.now();
           const elapsed = Date.now() - palmTimeRef.current;
@@ -233,52 +232,109 @@ export default function AirWritingApp() {
       palmTimeRef.current = null;
       setClearProg(0);
       setGesture("NO_HAND");
+      setDebugInfo("No hand detected");
     }
   }, [checkPinch, checkPalm]);
 
-  /* ---- STEP-BY-STEP INITIALIZATION ---- */
+  /* ---- MOUSE/TOUCH DRAWING ---- */
+  const getCanvasCoords = useCallback((e) => {
+    const canvas = drawRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = W / rect.width;
+    const scaleY = H / rect.height;
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    // Canvas is CSS-mirrored (scaleX -1), so flip X
+    return {
+      x: W - ((clientX - rect.left) * scaleX),
+      y: (clientY - rect.top) * scaleY,
+    };
+  }, []);
+
+  const handlePointerDown = useCallback((e) => {
+    if (drawMode !== "mouse") return;
+    e.preventDefault();
+    const pt = getCanvasCoords(e);
+    if (!pt) return;
+    mouseDrawingRef.current = true;
+    mouseLastPtRef.current = pt;
+    curPathRef.current = [pt];
+  }, [drawMode, getCanvasCoords]);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!mouseDrawingRef.current || drawMode !== "mouse") return;
+    e.preventDefault();
+    const pt = getCanvasCoords(e);
+    if (!pt) return;
+    const dc = drawRef.current;
+    if (!dc) return;
+    const ctx = dc.getContext("2d");
+    ctx.beginPath();
+    ctx.strokeStyle = colorRef.current;
+    ctx.lineWidth = sizeRef.current;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.moveTo(mouseLastPtRef.current.x, mouseLastPtRef.current.y);
+    ctx.lineTo(pt.x, pt.y);
+    ctx.stroke();
+    mouseLastPtRef.current = pt;
+    curPathRef.current.push(pt);
+  }, [drawMode, getCanvasCoords]);
+
+  const handlePointerUp = useCallback(() => {
+    if (!mouseDrawingRef.current) return;
+    mouseDrawingRef.current = false;
+    if (curPathRef.current.length > 1) {
+      pathsRef.current.push({
+        points: [...curPathRef.current],
+        color: colorRef.current,
+        size: sizeRef.current,
+      });
+    }
+    curPathRef.current = [];
+    mouseLastPtRef.current = null;
+  }, []);
+
+  /* ---- INITIALIZATION ---- */
   useEffect(() => {
     let cancelled = false;
     if (initRef.current) return;
     initRef.current = true;
 
     const init = async () => {
-      /* STEP 1: Wait for MediaPipe CDN scripts */
+      /* STEP 1: MediaPipe CDN scripts */
       setStatus("loading_scripts");
-      const scriptStart = Date.now();
+      const t0 = Date.now();
       while (!(window.Hands && window.HAND_CONNECTIONS)) {
         if (cancelled) return;
-        if (Date.now() - scriptStart > 20000) {
-          setErrorMsg("MediaPipe scripts failed to load. Please reload the page.");
+        if (Date.now() - t0 > 20000) {
+          setErrorMsg("MediaPipe scripts failed to load. You can still draw with mouse mode.");
           setStatus("error");
+          setDrawMode("mouse");
           return;
         }
         await new Promise((r) => setTimeout(r, 300));
       }
       if (cancelled) return;
 
-      /* STEP 2: Start camera */
+      /* STEP 2: Camera */
       setStatus("starting_camera");
       let stream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280, min: 640 },
-            height: { ideal: 720, min: 480 },
-            facingMode: "user",
-            frameRate: { ideal: 30 },
-          },
+          video: { width: { ideal: 1280, min: 640 }, height: { ideal: 720, min: 480 }, facingMode: "user", frameRate: { ideal: 30 } },
           audio: false,
         });
       } catch (err) {
-        if (err.name === "NotAllowedError") {
-          setErrorMsg("Camera blocked. Please allow camera access in your browser settings and reload.");
-        } else if (err.name === "NotFoundError") {
-          setErrorMsg("No camera found. Connect a webcam and reload.");
-        } else {
-          setErrorMsg("Camera error: " + err.message);
-        }
+        const msg = err.name === "NotAllowedError"
+          ? "Camera blocked. Allow camera access and reload. Mouse mode enabled."
+          : err.name === "NotFoundError"
+            ? "No camera found. Mouse mode enabled - draw with your mouse!"
+            : "Camera error: " + err.message + ". Mouse mode enabled.";
+        setErrorMsg(msg);
         setStatus("error");
+        setDrawMode("mouse");
         return;
       }
       if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
@@ -286,45 +342,50 @@ export default function AirWritingApp() {
 
       const video = videoRef.current;
       video.srcObject = stream;
-      try {
-        await video.play();
-      } catch (playErr) {
-        setErrorMsg("Could not play video: " + playErr.message);
+      try { await video.play(); } catch (e) {
+        setErrorMsg("Could not play video. Mouse mode enabled.");
         setStatus("error");
+        setDrawMode("mouse");
         return;
       }
       if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
       setCameraReady(true);
 
-      /* STEP 3: Initialize MediaPipe Hands */
+      /* STEP 3: MediaPipe Hands model */
       setStatus("loading_model");
-      let hands;
       try {
-        hands = new window.Hands({
+        const hands = new window.Hands({
           locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
         });
-        hands.setOptions({
-          maxNumHands: 1,
-          modelComplexity: 1,
-          minDetectionConfidence: 0.5,
-          minTrackingConfidence: 0.5,
-        });
+        hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
         hands.onResults(onResults);
         handsRef.current = hands;
 
-        // Warm-up: first send downloads the WASM model
-        if (video.readyState >= 2) {
-          await hands.send({ image: video });
+        // CRITICAL: Wait for video to be ready before warm-up
+        let waitCount = 0;
+        while (video.readyState < 2 && waitCount < 50) {
+          await new Promise((r) => setTimeout(r, 100));
+          waitCount++;
         }
+
+        // Warm-up: triggers WASM model download
+        console.log("[AirWrite] Warming up MediaPipe model...");
+        await hands.send({ image: video });
+        console.log("[AirWrite] Model warm-up complete!");
       } catch (err) {
-        setErrorMsg("Hand tracking model failed: " + err.message);
+        console.error("[AirWrite] Model init failed:", err);
+        setErrorMsg("Hand tracking failed to load. Mouse mode enabled - draw with mouse!");
         setStatus("error");
+        setDrawMode("mouse");
         return;
       }
       if (cancelled) return;
 
-      /* STEP 4: Start FPS-gated detection loop */
+      /* STEP 4: Detection loop */
       setStatus("ready");
+      setDrawMode("gesture");
+      console.log("[AirWrite] Ready! Gesture detection active.");
+
       let processing = false;
       let fpsCount = 0;
       let fpsTimer = performance.now();
@@ -332,44 +393,39 @@ export default function AirWritingApp() {
       const detect = async () => {
         if (cancelled) return;
         const now = performance.now();
-
         fpsCount++;
-        if (now - fpsTimer >= 1000) {
-          setFps(fpsCount);
-          fpsCount = 0;
-          fpsTimer = now;
-        }
+        if (now - fpsTimer >= 1000) { setFps(fpsCount); fpsCount = 0; fpsTimer = now; }
 
-        if (
-          !processing &&
-          now - lastFrameRef.current >= FRAME_INTERVAL &&
-          video.readyState >= 2 &&
-          handsRef.current
-        ) {
+        if (!processing && now - lastFrameRef.current >= FRAME_INTERVAL && video.readyState >= 2 && handsRef.current) {
           processing = true;
           lastFrameRef.current = now;
           try {
             await handsRef.current.send({ image: video });
+            errorCountRef.current = 0;
           } catch (e) {
-            // continue silently
+            errorCountRef.current++;
+            if (errorCountRef.current === 1) {
+              console.error("[AirWrite] Detection error:", e.message);
+            }
+            if (errorCountRef.current >= 30) {
+              console.error("[AirWrite] Too many errors, switching to mouse mode");
+              setDrawMode("mouse");
+              setDebugInfo("Gesture detection failed - Mouse mode active");
+              errorCountRef.current = 0;
+            }
           }
           processing = false;
         }
-        if (!cancelled) {
-          animFrameRef.current = requestAnimationFrame(detect);
-        }
+        if (!cancelled) { animFrameRef.current = requestAnimationFrame(detect); }
       };
       detect();
     };
 
     init();
-
     return () => {
       cancelled = true;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-      }
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, [onResults]);
 
@@ -381,18 +437,13 @@ export default function AirWritingApp() {
     curPathRef.current = [];
   };
 
-  const handleUndo = () => {
-    if (pathsRef.current.length) { pathsRef.current.pop(); redraw(); }
-  };
+  const handleUndo = () => { if (pathsRef.current.length) { pathsRef.current.pop(); redraw(); } };
 
   const handleSave = async () => {
     const c = drawRef.current;
     if (!c) return;
     try {
-      await axios.post(`${API}/drawings`, {
-        title: `Drawing ${new Date().toLocaleString()}`,
-        image_data: c.toDataURL("image/png"),
-      });
+      await axios.post(`${API}/drawings`, { title: `Drawing ${new Date().toLocaleString()}`, image_data: c.toDataURL("image/png") });
       fetchDrawings();
     } catch (e) { console.error("Save failed:", e); }
   };
@@ -413,23 +464,17 @@ export default function AirWritingApp() {
   };
 
   const fetchDrawings = async () => {
-    try { const r = await axios.get(`${API}/drawings`); setDrawings(r.data); }
-    catch (e) { console.error(e); }
+    try { const r = await axios.get(`${API}/drawings`); setDrawings(r.data); } catch (e) { console.error(e); }
   };
-
   useEffect(() => { fetchDrawings(); }, []);
-
   const handleDelete = async (id) => {
-    try { await axios.delete(`${API}/drawings/${id}`); fetchDrawings(); }
-    catch (e) { console.error(e); }
+    try { await axios.delete(`${API}/drawings/${id}`); fetchDrawings(); } catch (e) { console.error(e); }
   };
 
   const statusText = {
-    loading_scripts: "Loading MediaPipe scripts...",
-    starting_camera: "Starting camera...",
-    loading_model: "Loading hand tracking model (first time takes ~10s)...",
-    ready: null,
-    error: null,
+    loading_scripts: "Step 1/3: Loading MediaPipe scripts...",
+    starting_camera: "Step 2/3: Starting camera...",
+    loading_model: "Step 3/3: Loading AI model (first time ~10s)...",
   };
 
   return (
@@ -440,9 +485,16 @@ export default function AirWritingApp() {
           <h1>AirWrite</h1>
         </div>
         <div className="aw-header-right">
-          {status === "ready" && (
-            <span className="aw-fps" data-testid="fps-counter">{fps} FPS</span>
-          )}
+          {status === "ready" && <span className="aw-fps" data-testid="fps-counter">{fps} FPS</span>}
+          {/* Mode toggle */}
+          <button
+            className={`aw-mode-btn ${drawMode === "mouse" ? "active" : ""}`}
+            onClick={() => setDrawMode(drawMode === "gesture" ? "mouse" : "gesture")}
+            data-testid="mode-toggle"
+            title={drawMode === "gesture" ? "Switch to Mouse Draw" : "Switch to Gesture Draw"}
+          >
+            {drawMode === "gesture" ? <><Hand size={14} /> Gesture</> : <><Mouse size={14} /> Mouse</>}
+          </button>
           <p className="aw-tagline">Smart Air-Writing for Teachers</p>
         </div>
       </header>
@@ -453,29 +505,16 @@ export default function AirWritingApp() {
             <label className="aw-label">Brush Color</label>
             <div className="aw-palette">
               {COLORS.map((c) => (
-                <button
-                  key={c.hex}
-                  className={`aw-swatch${color === c.hex ? " active" : ""}`}
-                  style={{ background: c.hex }}
-                  onClick={() => setColor(c.hex)}
-                  data-testid={`color-btn-${c.hex.replace("#", "")}`}
-                  title={c.name}
-                />
+                <button key={c.hex} className={`aw-swatch${color === c.hex ? " active" : ""}`}
+                  style={{ background: c.hex }} onClick={() => setColor(c.hex)}
+                  data-testid={`color-btn-${c.hex.replace("#", "")}`} title={c.name} />
               ))}
             </div>
             <div className="aw-color-mixer" data-testid="color-mixer">
               <div className="aw-mixer-row">
-                <label className="aw-mixer-label">
-                  <Pipette size={14} />
-                  <span>Mix Your Color</span>
-                </label>
-                <input
-                  type="color"
-                  value={color}
-                  onChange={(e) => { setColor(e.target.value); addRecentColor(e.target.value); }}
-                  className="aw-color-input"
-                  data-testid="color-picker-input"
-                />
+                <label className="aw-mixer-label"><Pipette size={14} /><span>Mix Your Color</span></label>
+                <input type="color" value={color} onChange={(e) => { setColor(e.target.value); addRecentColor(e.target.value); }}
+                  className="aw-color-input" data-testid="color-picker-input" />
               </div>
               <div className="aw-current-color" style={{ background: color }} data-testid="current-color-preview">
                 <span>{color.toUpperCase()}</span>
@@ -497,94 +536,92 @@ export default function AirWritingApp() {
 
           <div className="aw-ctrl-group">
             <label className="aw-label">Brush Size <span className="aw-size-val">{size}px</span></label>
-            <input type="range" min="1" max="20" value={size}
-              onChange={(e) => setSize(Number(e.target.value))} className="aw-slider" data-testid="brush-size-slider" />
+            <input type="range" min="1" max="20" value={size} onChange={(e) => setSize(Number(e.target.value))}
+              className="aw-slider" data-testid="brush-size-slider" />
             <div className="aw-size-preview">
               <span className="aw-dot" style={{ width: size + 4, height: size + 4, background: color }} />
             </div>
           </div>
 
           <div className="aw-ctrl-group aw-buttons">
-            <button onClick={handleClear} className="aw-btn" data-testid="clear-canvas-btn">
-              <Trash2 size={16} /><span>Clear Canvas</span>
-            </button>
-            <button onClick={handleUndo} className="aw-btn" data-testid="undo-btn">
-              <Undo2 size={16} /><span>Undo</span>
-            </button>
-            <button onClick={handleSave} className="aw-btn" data-testid="save-btn">
-              <Save size={16} /><span>Save</span>
-            </button>
-            <button onClick={handleDownload} className="aw-btn" data-testid="download-btn">
-              <Download size={16} /><span>Download</span>
-            </button>
+            <button onClick={handleClear} className="aw-btn" data-testid="clear-canvas-btn"><Trash2 size={16} /><span>Clear Canvas</span></button>
+            <button onClick={handleUndo} className="aw-btn" data-testid="undo-btn"><Undo2 size={16} /><span>Undo</span></button>
+            <button onClick={handleSave} className="aw-btn" data-testid="save-btn"><Save size={16} /><span>Save</span></button>
+            <button onClick={handleDownload} className="aw-btn" data-testid="download-btn"><Download size={16} /><span>Download</span></button>
           </div>
 
           <div className="aw-guide" data-testid="gesture-guide">
-            <h3 className="aw-guide-title">Gesture Guide</h3>
+            <h3 className="aw-guide-title">How to Use</h3>
             <div className="aw-guide-item">
               <PenLine size={18} />
-              <div><strong>Pinch to Draw</strong><span>Thumb + Index finger close together</span></div>
+              <div><strong>Pinch to Draw</strong><span>Thumb + Index finger close</span></div>
             </div>
             <div className="aw-guide-item">
               <Hand size={18} />
               <div><strong>Palm to Clear</strong><span>Open palm for 1 second</span></div>
             </div>
+            <div className="aw-guide-item">
+              <Mouse size={18} />
+              <div><strong>Mouse/Touch</strong><span>Switch to Mouse mode in header</span></div>
+            </div>
           </div>
         </aside>
 
         <div className="aw-canvas-area">
-          <div className="aw-canvas-wrap" data-testid="canvas-wrapper">
-            {/* Layer 0: Live video (native element, mirrored via CSS) */}
-            <video
-              ref={videoRef}
-              className="aw-video"
-              playsInline
-              muted
-              data-testid="camera-video"
-            />
-
-            {/* Layer 1: Hand skeleton overlay (transparent) */}
+          <div
+            className="aw-canvas-wrap"
+            data-testid="canvas-wrapper"
+            onMouseDown={handlePointerDown}
+            onMouseMove={handlePointerMove}
+            onMouseUp={handlePointerUp}
+            onMouseLeave={handlePointerUp}
+            onTouchStart={handlePointerDown}
+            onTouchMove={handlePointerMove}
+            onTouchEnd={handlePointerUp}
+          >
+            <video ref={videoRef} className="aw-video" playsInline muted data-testid="camera-video" />
             <canvas ref={trackRef} className="aw-track-canvas" width={W} height={H} data-testid="tracking-canvas" />
-
-            {/* Layer 2: Drawing strokes overlay (transparent) */}
             <canvas ref={drawRef} className="aw-draw-canvas" width={W} height={H} data-testid="drawing-canvas" />
 
-            {/* Gesture Status Badge */}
+            {/* Gesture badge */}
             <div className={`aw-gesture-badge aw-g-${gesture.toLowerCase().replace("_", "-")}`} data-testid="gesture-status">
               {gesture === "DRAWING" && <><Pen size={14} /><span>Drawing</span></>}
               {gesture === "CLEARING" && (
-                <div className="aw-clear-ind">
-                  <Hand size={14} /><span>Clearing...</span>
+                <div className="aw-clear-ind"><Hand size={14} /><span>Clearing...</span>
                   <div className="aw-clear-track"><div className="aw-clear-fill" style={{ width: `${clearProg * 100}%` }} /></div>
                 </div>
               )}
-              {gesture === "CLEARED" && <span>Canvas Cleared</span>}
+              {gesture === "CLEARED" && <span>Cleared</span>}
               {gesture === "IDLE" && <><Hand size={14} /><span>Hand Detected</span></>}
-              {gesture === "NO_HAND" && <span>Show your hand</span>}
+              {gesture === "NO_HAND" && <span>{drawMode === "mouse" ? "Mouse Mode" : "Show hand"}</span>}
             </div>
 
-            {/* Step-by-step loading overlay */}
+            {/* Debug info */}
+            {debugInfo && status === "ready" && (
+              <div className="aw-debug" data-testid="debug-info">{debugInfo}</div>
+            )}
+
+            {/* Mode indicator */}
+            {drawMode === "mouse" && status === "ready" && (
+              <div className="aw-mouse-hint" data-testid="mouse-hint">
+                <Mouse size={16} /> Click and drag to draw
+              </div>
+            )}
+
+            {/* Loading overlay */}
             {status !== "ready" && status !== "error" && (
               <div className="aw-loading" data-testid="loading-overlay">
                 {cameraReady && <Video size={24} className="aw-cam-ok" />}
                 <Loader2 size={36} className="aw-spin" />
                 <p>{statusText[status]}</p>
-                <div className="aw-steps">
-                  <span className={status === "loading_scripts" ? "active" : "done"}>1. Scripts</span>
-                  <span className={status === "starting_camera" ? "active" : status === "loading_scripts" ? "" : "done"}>2. Camera</span>
-                  <span className={status === "loading_model" ? "active" : ""}>3. AI Model</span>
-                </div>
               </div>
             )}
 
-            {/* Error overlay */}
+            {/* Error overlay - partial, still allows mouse drawing */}
             {status === "error" && (
-              <div className="aw-error" data-testid="error-overlay">
-                <AlertCircle size={40} />
-                <p>{errorMsg}</p>
-                <button onClick={() => window.location.reload()} className="aw-btn" data-testid="reload-btn">
-                  Reload Page
-                </button>
+              <div className="aw-error-banner" data-testid="error-overlay">
+                <AlertCircle size={18} />
+                <span>{errorMsg}</span>
               </div>
             )}
           </div>
@@ -601,20 +638,16 @@ export default function AirWritingApp() {
       {gallery && (
         <div className="aw-gallery" data-testid="drawings-gallery">
           {drawings.length === 0 ? (
-            <p className="aw-gallery-empty">No saved drawings yet. Start writing in the air!</p>
-          ) : (
-            drawings.map((d) => (
-              <div key={d.id} className="aw-gallery-card" data-testid={`drawing-card-${d.id}`}>
-                <img src={d.image_data} alt={d.title} />
-                <div className="aw-gallery-meta">
-                  <span>{d.title}</span>
-                  <button onClick={() => handleDelete(d.id)} data-testid={`delete-drawing-${d.id}`} className="aw-gallery-del">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+            <p className="aw-gallery-empty">No saved drawings yet!</p>
+          ) : drawings.map((d) => (
+            <div key={d.id} className="aw-gallery-card" data-testid={`drawing-card-${d.id}`}>
+              <img src={d.image_data} alt={d.title} />
+              <div className="aw-gallery-meta">
+                <span>{d.title}</span>
+                <button onClick={() => handleDelete(d.id)} data-testid={`delete-drawing-${d.id}`} className="aw-gallery-del"><Trash2 size={14} /></button>
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
       )}
     </div>
