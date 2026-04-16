@@ -25,7 +25,8 @@ Smart Air-Writing with Gesture Control for a teacher building for educational he
 - [x] 20 color swatches + Photoshop color mixer + recent colors
 - [x] Save/Download/Undo/Clear + Gallery with MongoDB
 - [x] Step-by-step initialization with status messages
-- [x] Auto error recovery (30 failures → mouse mode)
+- [x] Camera timeout (15s) prevents infinite hang on getUserMedia
+- [x] Specific error messages: timeout, blocked, not found, in-use by other tab
 
 ## Testing (6 Iterations)
 - All iterations: Backend 100%, Frontend 100%
