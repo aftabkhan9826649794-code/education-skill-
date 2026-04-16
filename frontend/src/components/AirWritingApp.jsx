@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import {
   Pen, Trash2, Save, Undo2, Download, Hand, ChevronDown,
-  ChevronUp, Loader2, AlertCircle, PenLine
+  ChevronUp, Loader2, AlertCircle, PenLine, Pipette
 } from "lucide-react";
 import axios from "axios";
 
@@ -38,6 +38,7 @@ export default function AirWritingApp() {
   const handsRef = useRef(null);
   const camRef = useRef(null);
   const initDoneRef = useRef(false);
+  const animFrameRef = useRef(null);
 
   const pinchingRef = useRef(false);
   const lastPtRef = useRef(null);
@@ -47,7 +48,7 @@ export default function AirWritingApp() {
   const colorRef = useRef("#D4AF37");
   const sizeRef = useRef(4);
 
-  const [gesture, setGesture] = useState("IDLE");
+  const [gesture, setGesture] = useState("NO_HAND");
   const [color, setColor] = useState("#D4AF37");
   const [size, setSize] = useState(4);
   const [loading, setLoading] = useState(true);
@@ -55,9 +56,17 @@ export default function AirWritingApp() {
   const [clearProg, setClearProg] = useState(0);
   const [drawings, setDrawings] = useState([]);
   const [gallery, setGallery] = useState(false);
+  const [recentColors, setRecentColors] = useState([]);
 
   useEffect(() => { colorRef.current = color; }, [color]);
   useEffect(() => { sizeRef.current = size; }, [size]);
+
+  const addRecentColor = useCallback((hex) => {
+    setRecentColors((prev) => {
+      const filtered = prev.filter((c) => c !== hex);
+      return [hex, ...filtered].slice(0, 5);
+    });
+  }, []);
 
   const checkPalm = useCallback((lm) => {
     const tips = [8, 12, 16, 20];
@@ -69,7 +78,7 @@ export default function AirWritingApp() {
   const checkPinch = useCallback((lm, w, h) => {
     const dx = (lm[4].x - lm[8].x) * w;
     const dy = (lm[4].y - lm[8].y) * h;
-    return Math.sqrt(dx * dx + dy * dy) < 30;
+    return Math.sqrt(dx * dx + dy * dy) < 55;
   }, []);
 
   const redraw = useCallback(() => {
@@ -98,6 +107,10 @@ export default function AirWritingApp() {
     if (!tc || !dc) return;
     const tctx = tc.getContext("2d");
     const dctx = dc.getContext("2d");
+
+    // Enable high quality image rendering
+    tctx.imageSmoothingEnabled = true;
+    tctx.imageSmoothingQuality = "high";
 
     tctx.save();
     tctx.clearRect(0, 0, W, H);
@@ -208,7 +221,7 @@ export default function AirWritingApp() {
       }
       palmTimeRef.current = null;
       setClearProg(0);
-      setGesture("IDLE");
+      setGesture("NO_HAND");
     }
   }, [checkPinch, checkPalm]);
 
@@ -216,80 +229,118 @@ export default function AirWritingApp() {
     let cancelled = false;
     if (initDoneRef.current) return;
 
-    const poll = setInterval(() => {
-      if (cancelled) {
-        clearInterval(poll);
-        return;
-      }
-      if (
-        window.Hands &&
-        window.Camera &&
-        window.drawConnectors &&
-        window.drawLandmarks &&
-        window.HAND_CONNECTIONS
+    const startAll = async () => {
+      // Wait for MediaPipe scripts to load
+      while (
+        !(window.Hands && window.drawConnectors && window.drawLandmarks && window.HAND_CONNECTIONS)
       ) {
-        clearInterval(poll);
-        if (initDoneRef.current) return;
-        initDoneRef.current = true;
+        if (cancelled) return;
+        await new Promise((r) => setTimeout(r, 200));
+      }
 
-        try {
-          const hands = new window.Hands({
-            locateFile: (f) =>
-              `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
-          });
-          hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.7,
-            minTrackingConfidence: 0.5,
-          });
-          hands.onResults(onResults);
-          handsRef.current = hands;
+      if (initDoneRef.current || cancelled) return;
+      initDoneRef.current = true;
 
-          const cam = new window.Camera(videoRef.current, {
-            onFrame: async () => {
-              if (handsRef.current) {
-                await handsRef.current.send({ image: videoRef.current });
-              }
-            },
-            width: W,
-            height: H,
-          });
-          cam
-            .start()
-            .then(() => {
-              if (!cancelled) {
-                setLoading(false);
-                setError(null);
-              }
-            })
-            .catch(() => {
-              if (!cancelled) {
-                setError(
-                  "Camera access denied. Please allow camera permission and reload."
-                );
-                setLoading(false);
-              }
-            });
-          camRef.current = cam;
-        } catch (err) {
-          setError("Failed to initialize hand tracking: " + err.message);
+      try {
+        // Initialize MediaPipe Hands
+        const hands = new window.Hands({
+          locateFile: (f) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}`,
+        });
+        hands.setOptions({
+          maxNumHands: 1,
+          modelComplexity: 1,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
+        hands.onResults(onResults);
+        handsRef.current = hands;
+
+        // Get camera stream manually for better quality control
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280, min: 640 },
+            height: { ideal: 720, min: 480 },
+            facingMode: "user",
+            frameRate: { ideal: 30 },
+          },
+          audio: false,
+        });
+
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.width = W;
+        video.height = H;
+
+        await new Promise((resolve) => {
+          video.onloadedmetadata = resolve;
+        });
+        await video.play();
+
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+
+        setLoading(false);
+        setError(null);
+
+        // Detection loop using requestAnimationFrame
+        let processing = false;
+        const detect = async () => {
+          if (cancelled) return;
+          if (!processing && video.readyState >= 2 && handsRef.current) {
+            processing = true;
+            try {
+              await handsRef.current.send({ image: video });
+            } catch (e) {
+              // silently continue
+            }
+            processing = false;
+          }
+          if (!cancelled) {
+            animFrameRef.current = requestAnimationFrame(detect);
+          }
+        };
+        detect();
+        camRef.current = stream;
+      } catch (err) {
+        if (!cancelled) {
+          if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
+            setError("Camera access denied. Please allow camera permission and reload the page.");
+          } else if (err.name === "NotFoundError") {
+            setError("No camera found. Please connect a camera and reload.");
+          } else {
+            setError("Failed to start camera: " + err.message);
+          }
           setLoading(false);
         }
       }
-    }, 200);
+    };
+
+    startAll();
 
     const timeout = setTimeout(() => {
       if (!initDoneRef.current) {
-        setError("MediaPipe scripts taking too long. Please check your connection and reload.");
+        setError(
+          "MediaPipe scripts taking too long. Please check your connection and reload."
+        );
         setLoading(false);
       }
     }, 30000);
 
     return () => {
       cancelled = true;
-      clearInterval(poll);
       clearTimeout(timeout);
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (camRef.current && camRef.current.getTracks) {
+        camRef.current.getTracks().forEach((t) => t.stop());
+      }
     };
   }, [onResults]);
 
@@ -385,6 +436,48 @@ export default function AirWritingApp() {
                   title={c.name}
                 />
               ))}
+            </div>
+            <div className="aw-color-mixer" data-testid="color-mixer">
+              <div className="aw-mixer-row">
+                <label className="aw-mixer-label">
+                  <Pipette size={14} />
+                  <span>Mix Your Color</span>
+                </label>
+                <input
+                  type="color"
+                  value={color}
+                  onChange={(e) => {
+                    setColor(e.target.value);
+                    addRecentColor(e.target.value);
+                  }}
+                  className="aw-color-input"
+                  data-testid="color-picker-input"
+                />
+              </div>
+              <div
+                className="aw-current-color"
+                style={{ background: color }}
+                data-testid="current-color-preview"
+              >
+                <span>{color.toUpperCase()}</span>
+              </div>
+              {recentColors.length > 0 && (
+                <div className="aw-recent-colors">
+                  <span className="aw-recent-label">Recent</span>
+                  <div className="aw-recent-row">
+                    {recentColors.map((c) => (
+                      <button
+                        key={c}
+                        className={`aw-swatch aw-swatch-sm${color === c ? " active" : ""}`}
+                        style={{ background: c }}
+                        onClick={() => setColor(c)}
+                        title={c}
+                        data-testid={`recent-color-${c.replace("#", "")}`}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -486,7 +579,7 @@ export default function AirWritingApp() {
             />
 
             <div
-              className={`aw-gesture-badge aw-g-${gesture.toLowerCase()}`}
+              className={`aw-gesture-badge aw-g-${gesture.toLowerCase().replace("_", "-")}`}
               data-testid="gesture-status"
             >
               {gesture === "DRAWING" && (
@@ -508,7 +601,13 @@ export default function AirWritingApp() {
                 </div>
               )}
               {gesture === "CLEARED" && <span>Canvas Cleared</span>}
-              {gesture === "IDLE" && <span>Ready</span>}
+              {gesture === "IDLE" && (
+                <>
+                  <Hand size={14} />
+                  <span>Hand Detected - Ready</span>
+                </>
+              )}
+              {gesture === "NO_HAND" && <span>Show your hand to start</span>}
             </div>
 
             {loading && (
