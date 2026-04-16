@@ -26,7 +26,7 @@ const COLORS = [
   { hex: "#9370DB", name: "Lavender" }, { hex: "#FF8C00", name: "Amber" },
 ];
 
-export default function AirWritingApp({ onNewCreation }) {
+export default function AirWritingApp({ onNewCreation, onHome }) {
   const videoRef = useRef(null);
   const trackRef = useRef(null);
   const drawRef = useRef(null);
@@ -515,6 +515,11 @@ export default function AirWritingApp({ onNewCreation }) {
           {onNewCreation && (
             <button className="aw-mode-btn active" onClick={onNewCreation} data-testid="new-creation-btn">
               <Pen size={14} /> New Creation
+            </button>
+          )}
+          {onHome && (
+            <button className="aw-mode-btn" onClick={onHome} data-testid="home-btn">
+              Home
             </button>
           )}
           {/* Mode toggle */}
