@@ -1,75 +1,66 @@
 # AirWrite - Smart Air-Writing Tool for Teachers
 
 ## Original Problem Statement
-Build "Smart Air-Writing" with Gesture Control (Hybrid Mode) for a teacher who wants to use it for educational help purposes.
+Build "Smart Air-Writing" with Gesture Control (Hybrid Mode) for a teacher making it for educational help. Final rebuild with RCB Luxury Theme and optimized native Canvas API.
 
 ### Core Requirements
-1. **Pinch Gesture Activation**: Drawing only starts when thumb_tip and index_finger_tip distance < 30px
-2. **Air-Writing**: Track Landmark 8 (index finger tip) for drawing on overlay canvas
-3. **Clear Gesture**: Full Palm (all fingers extended) for 2 seconds triggers canvas.clear()
-4. **UI**: Deep Royal Purple (#301934) background, Gold (#D4AF37) borders on all controls
-5. **Button Alignment**: All buttons strictly LEFT-aligned
-6. **Performance**: Single MediaPipe instance, maxNumHands: 1
+1. **Native HTML5 Canvas API**: Only `beginPath()`, `moveTo()`, `lineTo()` for drawing
+2. **FPS-gated loop**: 15-20 FPS via `requestAnimationFrame` to save CPU
+3. **Pinch Gesture**: Normalized threshold < 0.03 (resolution-independent)
+4. **Palm Clear**: Full palm > 1 second to auto-clear canvas
+5. **Single MediaPipe instance**: maxNumHands: 1
+6. **HD Camera**: 1280x720 via manual `getUserMedia`
+7. **RCB Luxury Theme**: #301934 bg, #8B0000 red buttons, #D4AF37 gold borders
 
 ## Architecture
-- **Backend**: FastAPI (Python) with MongoDB for drawing persistence
-- **Frontend**: React.js with MediaPipe Hands (CDN) for hand tracking
-- **Database**: MongoDB (drawings collection)
-- **Hand Tracking**: MediaPipe Hands JS via CDN (camera_utils, drawing_utils, hands)
+- **Backend**: FastAPI + MongoDB (drawings collection)
+- **Frontend**: React.js + MediaPipe Hands (CDN) + Native Canvas API
+- **Camera**: Manual `navigator.mediaDevices.getUserMedia` + `requestAnimationFrame`
+- **Hand Tracking**: MediaPipe Hands JS (CDN), single instance
 
 ## User Persona
-- Teacher using the tool for classroom/educational demonstrations
-- Needs simple, intuitive gesture-based writing
-- Save/download drawings for later reference
+- Teacher using tool for classroom demonstrations and educational help
+- Students need vibrant colors for engagement
 
 ## What's Been Implemented (Jan 2026)
-- [x] MediaPipe hand tracking with single instance (maxNumHands: 1)
-- [x] Pinch gesture detection (landmark 4 + 8 distance < 30px)
-- [x] Air-writing tracking Landmark 8 with smoothing
-- [x] Full palm gesture (all fingers extended) for 2s → clear canvas
-- [x] Mirrored webcam view with hand skeleton overlay
-- [x] Drawing canvas with color palette (20 colors with tooltips - kid-friendly)
-- [x] Brush size slider (1-20px)
-- [x] Clear, Undo, Save, Download buttons (all LEFT-aligned)
-- [x] Deep Royal Purple (#301934) bg + Gold (#D4AF37) borders
-- [x] Gesture status badge (IDLE/DRAWING/CLEARING/CLEARED)
-- [x] Gesture guide panel
-- [x] Save drawings to MongoDB, gallery view
-- [x] Download drawings as PNG
-- [x] Responsive layout
-- [x] Error handling for camera access denial
-- [x] BUG FIX: useEffect race condition - removed loading from deps, added initDoneRef guard
-- [x] Expanded color palette from 8 to 20 colors (Gold, White, Red, Green, Blue, Pink, Mint, Orange, Magenta, Cyan, Yellow, Hot Pink, Spring, Purple, Tomato, Turquoise, Rose, Lime, Lavender, Amber)
-- [x] BUG FIX: Replaced MediaPipe Camera utility with manual getUserMedia + requestAnimationFrame loop for reliable camera initialization
-- [x] BUG FIX: Increased pinch threshold from 30px to 55px for better real-world detection
-- [x] Lowered detection confidence from 0.7 to 0.5 for better hand detection
-- [x] Added image smoothing (imageSmoothingQuality: "high") for better video quality
-- [x] Added Photoshop-style color mixer: native HTML color picker input + color preview with hex code + recent colors (up to 5)
-- [x] Better gesture feedback: NO_HAND vs IDLE (Hand Detected - Ready) vs DRAWING vs CLEARING
+- [x] Native Canvas API drawing (beginPath/moveTo/lineTo only)
+- [x] FPS-gated detection loop at 18 FPS (TARGET_FPS=18)
+- [x] Normalized pinch threshold (0.03) - resolution independent
+- [x] Full palm gesture > 1s clears canvas
+- [x] Single MediaPipe instance, maxNumHands: 1
+- [x] HD camera 1280x720 via manual getUserMedia
+- [x] RCB Luxury Theme: Deep Royal Purple (#301934) + RCB Red (#8B0000) + Gold (#D4AF37)
+- [x] Sidebar: flex column, flex-start, gap 15px, padding 20px
+- [x] Buttons: width 100%, border-radius 8px, text-align left, 2px gold border
+- [x] Save & Clear buttons strictly LEFT-aligned
+- [x] All text in Gold or White
+- [x] 20 color swatches with name tooltips in 5-column grid
+- [x] Photoshop-style color mixer: native HTML5 color picker + preview + recent colors
+- [x] Image smoothing for HD quality rendering
+- [x] FPS counter in header
+- [x] Gesture states: NO_HAND, IDLE (Hand Detected), DRAWING, CLEARING, CLEARED
+- [x] Save/Download/Undo/Clear functionality
+- [x] Drawing gallery with MongoDB persistence
+- [x] Responsive layout for mobile/tablet
 
 ## API Endpoints
 - GET /api/ - Health message
 - GET /api/health - Health check
 - POST /api/drawings - Save drawing (base64 image)
-- GET /api/drawings - List saved drawings
+- GET /api/drawings - List saved drawings (sorted by created_at desc)
 - DELETE /api/drawings/{id} - Delete drawing
 
-## Tech Stack
-- React 19, Tailwind CSS, Lucide React icons
-- FastAPI, Motor (async MongoDB), Pydantic
-- MediaPipe Hands JS (CDN)
-- Fonts: Syne (headings), Plus Jakarta Sans (body)
-
-## Testing Results
+## Testing Results (Iteration 4)
 - Backend: 100% pass rate
 - Frontend: 100% pass rate
-- Colors verified: #301934 (Royal Purple), #D4AF37 (Gold)
-- Alignment verified: All buttons flex-start / text-align left
+- All CSS values verified: #301934 bg, #8B0000 buttons, #D4AF37 borders
+- Sidebar layout verified: flex column, flex-start, gap 15px, padding 20px
+- Button compliance verified: width 100%, text-align left, border-radius 8px
 
-## Backlog / Future Features
-- P1: Multi-hand support toggle
-- P1: Whiteboard mode (clean background instead of webcam)
+## Backlog
+- P1: Whiteboard mode (dark/light background toggle)
+- P1: Fullscreen presentation mode
 - P2: Text recognition (OCR) from air-writing
-- P2: Classroom sharing (real-time broadcast)
-- P3: Custom gesture shortcuts
+- P2: Rainbow brush mode (auto-changing colors)
+- P3: Classroom broadcast/sharing
 - P3: Recording/playback of writing sessions
